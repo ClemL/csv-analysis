@@ -92,12 +92,14 @@ const RULES: Rule[] = [
   {
     category: 'medical-record-number',
     label: 'Medical record number',
-    name: /(^|_)mrn(_|$)|medical.?record|(^|_)chart.?(no|num|number)/,
+    // Anchored on both sides: an unanchored `chart_no` also matches chart_notes.
+    name: /(^|_)mrn(_|$)|medical.?record|(^|_)chart_?(no|num|number)(_|$)/,
   },
   {
     category: 'member-id',
     label: 'Member or patient identifier',
-    name: /(member|subscriber|patient|beneficiary|enrollee|cardholder).?(id|no|num|number|nbr|key)/,
+    // Anchored on both sides: unanchored, `patient_no` also matches patient_notes.
+    name: /(^|_)(member|subscriber|patient|beneficiary|enrollee|cardholder)_?(id|no|num|number|nbr|key)(_|$)/,
   },
   {
     category: 'npi',
@@ -123,7 +125,10 @@ const RULES: Rule[] = [
   {
     category: 'name',
     label: 'Person name',
-    name: /(first|last|middle|given|sur|full|patient|member|subscriber).?name|(^|_)name(_|$)/,
+    // A person qualifier has to sit immediately before "name", or the column
+    // has to be called exactly "name". Matching a bare `_name` suffix flags
+    // every brand_name, generic_name and labeler_name in a drug file.
+    name: /(^|_)(first|last|middle|given|sur|maiden|full|legal|preferred|patient|member|subscriber|beneficiary|enrollee|guarantor|insured)_?names?(_|$)|^names?$/,
     guard: (c) => c.type === 'text' || c.type === 'empty',
   },
   {

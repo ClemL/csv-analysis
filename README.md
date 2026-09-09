@@ -71,11 +71,20 @@ column text.
 **Possible PHI or personal data** — columns that look like SSNs, dates of birth,
 medical record numbers, member or patient identifiers, NPIs, emails, phone
 numbers, names or addresses raise a banner and a `phi?` badge. Header names and
-value patterns are both used; NPIs are validated by their Luhn check digit
-(against the `80840` issuer prefix) and SSN and phone patterns require real
-formatting, so a bare run of digits — an account number, an NDC, a claim ID — does
-not flag. A postal code alone is not treated as identifying, only in company with
-something else.
+value patterns are both used, and the rules are written to avoid false positives:
+
+- **Name columns need a person qualifier.** `first_name`, `patient_name`,
+  `lastname` and a column called exactly `name` flag; `brand_name`,
+  `generic_name`, `labeler_name`, `pharmacy_name` and `file_name` do not. A rule
+  that matched any `_name` suffix flagged every drug column in an NDC extract.
+- **Identifier rules are anchored on both sides.** `patient_id` and `chart_no`
+  flag; `patient_notes` and `chart_notes` do not.
+- **NPIs are validated** by their Luhn check digit against the `80840` issuer
+  prefix, so an arbitrary ten-digit column does not flag.
+- **SSN and phone patterns require real formatting**, so a bare run of digits — an
+  account number, an NDC, a claim ID — does not flag.
+- **A postal code alone is not identifying**, only in company with something
+  else.
 
 **Data-quality warnings**
 
