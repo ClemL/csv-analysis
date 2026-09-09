@@ -3,12 +3,14 @@
 import { useCallback, useDeferredValue, useMemo, useRef, useState } from 'react';
 import { DELIMITERS, delimiterById, detectDelimiter, type DelimiterId } from '@/lib/csv';
 import { analyze } from '@/lib/stats';
+import { inferSqlColumns } from '@/lib/sql';
 import { SAMPLES } from '@/lib/samples';
 import { formatInt } from '@/lib/format';
 import { Overview } from './Overview';
 import { FirstRecord } from './FirstRecord';
 import { ColumnStats } from './ColumnStats';
 import { DataPreview } from './DataPreview';
+import { SqlPanel } from './SqlPanel';
 
 /** Parsing happens on the main thread, so very large pastes are clipped. */
 const MAX_CHARS = 5_000_000;
@@ -27,6 +29,7 @@ export function Analyzer() {
   const [hasHeader, setHasHeader] = useState(true);
   const [trimFields, setTrimFields] = useState(true);
   const [recognizeNullTokens, setRecognizeNullTokens] = useState(true);
+  const [showSqlTypes, setShowSqlTypes] = useState(true);
   const [dragging, setDragging] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -42,6 +45,11 @@ export function Analyzer() {
   const analysis = useMemo(
     () => analyze(source, { delimiter, hasHeader, trimFields, recognizeNullTokens }),
     [source, delimiter, hasHeader, trimFields, recognizeNullTokens],
+  );
+
+  const sqlColumns = useMemo(
+    () => (analysis && showSqlTypes ? inferSqlColumns(analysis) : null),
+    [analysis, showSqlTypes],
   );
 
   const readFile = useCallback((file: File) => {
@@ -129,6 +137,15 @@ export function Analyzer() {
             Treat NULL/NA/N/A as null
           </label>
 
+          <label className="field">
+            <input
+              type="checkbox"
+              checked={showSqlTypes}
+              onChange={(e) => setShowSqlTypes(e.target.checked)}
+            />
+            SQL types (Azure SQL)
+          </label>
+
           <span className="spacer" />
 
           {SAMPLES.map((s) => (
@@ -176,7 +193,8 @@ export function Analyzer() {
             <Overview analysis={analysis} autoDetected={delimiterId === 'auto'} />
           </section>
           <FirstRecord analysis={analysis} />
-          <ColumnStats analysis={analysis} />
+          <ColumnStats analysis={analysis} sqlColumns={sqlColumns ?? undefined} />
+          {sqlColumns ? <SqlPanel analysis={analysis} columns={sqlColumns} /> : null}
           <DataPreview analysis={analysis} />
         </>
       ) : (

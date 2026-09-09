@@ -70,6 +70,8 @@ export interface Analysis {
   raggedRows: { line: number; fields: number }[];
   emptyRows: number;
   hasQuotedFields: boolean;
+  /** Whether NULL/NA/... tokens were counted as missing for this run. */
+  nullTokensRecognized: boolean;
   embeddedNewlines: number;
   unterminatedQuote: boolean;
   columns: ColumnProfile[];
@@ -79,6 +81,8 @@ export interface Analysis {
 const INTEGER_RE = /^[-+]?\d+$/;
 const DECIMAL_RE = /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/;
 const GROUPED_NUMBER_RE = /^[-+]?\d{1,3}(,\d{3})+(\.\d+)?$/;
+/** `02476` is a zip code, not the number 2476: leading zeros mean identifier. */
+const LEADING_ZERO_RE = /^[-+]?0\d/;
 const BOOLEAN_VALUES = new Set(['true', 'false', 'yes', 'no', 't', 'f', 'y', 'n']);
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
 const US_DATE_RE = /^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}( \d{1,2}:\d{2}(:\d{2})?( ?[APap][Mm])?)?$/;
@@ -112,9 +116,10 @@ function inferType(values: string[]): ColumnType {
   let dates = 0;
 
   for (const v of values) {
-    if (INTEGER_RE.test(v)) integers += 1;
+    const zeroPadded = LEADING_ZERO_RE.test(v);
+    if (INTEGER_RE.test(v) && !zeroPadded) integers += 1;
     const n = toNumber(v);
-    if (n !== null && Number.isFinite(n)) numbers += 1;
+    if (n !== null && Number.isFinite(n) && !zeroPadded) numbers += 1;
     if (BOOLEAN_VALUES.has(v.toLowerCase())) booleans += 1;
     if (isDate(v)) dates += 1;
   }
@@ -293,6 +298,7 @@ export function analyze(text: string, options: AnalyzeOptions): Analysis | null 
     raggedRows,
     emptyRows,
     hasQuotedFields: parsed.hasQuotedFields,
+    nullTokensRecognized: recognizeNullTokens,
     embeddedNewlines: parsed.embeddedNewlines,
     unterminatedQuote: parsed.unterminatedQuote,
     columns,

@@ -42,6 +42,9 @@ React and Next.js.
 | Column | Inferred type, fill rate, null/empty count (split into blanks and null tokens), distinct count, min/max range, mean / median for numerics, min/max/avg length for text, date range, five most common values |
 | Preview | First 50 data rows in a scrollable table, with empty and whitespace-only cells marked |
 
+**Azure SQL** — an optional "SQL types (Azure SQL)" setting adds an inferred
+T-SQL type per column and a script generator. See below.
+
 **Data-quality warnings**
 
 - Rows whose field count differs from the header (with line numbers).
@@ -58,6 +61,59 @@ separators (`1,234.50`), a currency prefix (`$99`) or accounting negatives
 **Null handling** counts empty strings as missing always, and `NULL`, `NA`,
 `N/A`, `NIL`, `NONE`, `NAN`, `\N`, `#N/A` and `UNDEFINED` as missing when the
 "treat NULL/NA/N/A as null" toggle is on. The column table separates the two.
+
+## SQL script generation
+
+With the "SQL types (Azure SQL)" setting on, the column table gains a **SQL type**
+column (hover a cell for the reasoning), and a **SQL script** panel appears. Enter
+a target table — `dbo.ImportedData` by default, schema-qualified names accepted —
+and press **Generate** to fill two read-only boxes: a `CREATE TABLE` sized to the
+inferred types, and `INSERT` statements carrying every row. Both can be copied or
+downloaded as `.sql`.
+
+### Type mapping
+
+| Profiled as | Emitted type | Chosen by |
+| --- | --- | --- |
+| boolean | `BIT` | only true/false/yes/no/t/f/y/n values |
+| integer | `TINYINT`, `SMALLINT`, `INT`, `BIGINT` | the observed min/max range |
+| integer, >18 digits | `DECIMAL(n,0)` | too wide for `BIGINT` |
+| decimal | `DECIMAL(p,s)` | max integer digits + max decimal places, plus two digits of headroom |
+| decimal, scientific notation | `FLOAT` | exponents cannot be sized as a decimal |
+| date, no time | `DATE` | no time component in any value |
+| date + time | `DATETIME2(n)` | `n` = observed fractional-second digits |
+| date + UTC offset | `DATETIMEOFFSET(n)` | a trailing `Z` or `±hh:mm` |
+| GUID | `UNIQUEIDENTIFIER` | every value matches the GUID form |
+| text | `VARCHAR(n)` / `NVARCHAR(n)` | `NVARCHAR` only when non-ASCII characters are present; `n` is the longest value rounded up to the next bucket (10, 20, 50, 100, 200, 255, 500, 1000, 2000, 4000, 8000, `MAX`) |
+| no values at all | `NVARCHAR(255) NULL` | nothing to infer from |
+
+A column is `NOT NULL` only when nothing in the sample was missing.
+
+Two cases deserve attention because they are the usual way a CSV import loses
+data silently:
+
+- **Zero-padded identifiers.** `02476` is a zip code, not the number 2476. Any
+  column whose values carry leading zeros profiles as text and lands in a
+  character type, so the padding survives.
+- **Sample-sized columns.** Types come from what was pasted. Bucketed lengths and
+  the two extra decimal digits give headroom, but a 20-row sample cannot know the
+  longest value in a 2-million-row file. Widen before a production load.
+
+### Literals
+
+Values are written to match the inferred type: numbers are emitted unquoted with
+currency symbols, thousands separators and accounting parentheses stripped
+(`$1,204.55` → `1204.55`, `(88.20)` → `-88.20`) and the digits otherwise
+untouched, so precision survives; booleans become `1`/`0`; strings are quoted with
+`''` escaping and an `N` prefix on Unicode columns; nulls and blanks become
+`NULL`. A value that cannot be represented in its column's type — a stray word in
+a numeric column — is written as `NULL` and counted in a warning above the script.
+
+Rows are batched 1,000 at a time, T-SQL's limit for a multi-row `VALUES` clause.
+`GO` separators are included for SSMS, Azure Data Studio and `sqlcmd`; strip them
+if you are running the script through a driver such as `SqlClient`. The
+`DROP TABLE` guard is emitted commented out — a generated script tends to get
+pasted into whichever connection happens to be open.
 
 ## Running locally
 
@@ -105,18 +161,24 @@ components/
   FirstRecord.tsx   row 1 as key/value pairs
   ColumnStats.tsx   per-column profile table
   DataPreview.tsx   scrollable row preview
+  SqlPanel.tsx      table name, generate button, read-only script boxes
 lib/
   csv.ts            parser and delimiter detection
   stats.ts          type inference and column profiling
+  sql.ts            Azure SQL type inference and script generation
   format.ts         display formatting
   samples.ts        built-in sample datasets
 tests/
-  csv.test.ts       unit tests
+  csv.test.ts       parser and profiler tests
+  sql.test.ts       SQL inference and script generation tests
 ```
 
 ## Limits
 
 - Input over 5,000,000 characters is clipped, and the app says so.
+- `INSERT` generation covers the first 5,000 data rows; past that the script
+  stops being something you would paste by hand, and the app says how many rows
+  were left out.
 - Column profiling covers the first 20,000 data rows; row and line counts still
   reflect the whole input, and the app reports when profiling was capped.
 - Parsing is synchronous on the main thread. 100,000 rows (~4.4 MB) parse and

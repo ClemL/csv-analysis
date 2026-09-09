@@ -132,6 +132,13 @@ test('profiles types, nulls and numeric statistics', () => {
   assert.equal(name.blank, 1);
 });
 
+test('zero-padded identifiers profile as text, not numbers', () => {
+  const result = analyze('zip,n\n02476,1\n01730,2\n02138,3', options);
+  assert.equal(result?.columns[0].type, 'text');
+  assert.equal(result?.columns[0].numeric, undefined);
+  assert.equal(result?.columns[1].type, 'integer');
+});
+
 test('reports rows whose field count differs from the header', () => {
   const result = analyze('a,b,c\n1,2,3\n4,5', options);
   assert.deepEqual(result?.raggedRows, [{ line: 3, fields: 2 }]);

@@ -1,4 +1,5 @@
 import type { Analysis, ColumnProfile } from '@/lib/stats';
+import type { SqlColumn } from '@/lib/sql';
 import { formatInt, formatNumber, formatPercent } from '@/lib/format';
 
 function FillBar({ rate }: { rate: number }) {
@@ -29,7 +30,14 @@ function central(col: ColumnProfile): string {
   return `mean ${formatNumber(col.numeric.mean)} · median ${formatNumber(col.numeric.median)}`;
 }
 
-export function ColumnStats({ analysis }: { analysis: Analysis }) {
+export function ColumnStats({
+  analysis,
+  sqlColumns,
+}: {
+  analysis: Analysis;
+  /** Present only while the SQL types setting is on. */
+  sqlColumns?: SqlColumn[];
+}) {
   return (
     <section className="panel">
       <div className="panel-head">
@@ -46,6 +54,7 @@ export function ColumnStats({ analysis }: { analysis: Analysis }) {
               <th className="num">#</th>
               <th>Name</th>
               <th>Type</th>
+              {sqlColumns ? <th>SQL type</th> : null}
               <th>Filled</th>
               <th className="num">Null / empty</th>
               <th className="num">Distinct</th>
@@ -62,6 +71,14 @@ export function ColumnStats({ analysis }: { analysis: Analysis }) {
                 <td>
                   <span className={`badge type-${col.type}`}>{col.type}</span>
                 </td>
+                {sqlColumns ? (
+                  <td className="mono sql-type" title={sqlColumns[col.index]?.rationale}>
+                    {sqlColumns[col.index]?.type}{' '}
+                    <span className="faint">
+                      {sqlColumns[col.index]?.nullable ? 'NULL' : 'NOT NULL'}
+                    </span>
+                  </td>
+                ) : null}
                 <td>
                   <FillBar rate={col.fillRate} />
                 </td>
