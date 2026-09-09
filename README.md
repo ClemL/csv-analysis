@@ -1,0 +1,124 @@
+# CSV Inspector
+
+A single-page web app for parsing, profiling and understanding delimited files.
+Paste a CSV — the whole file or just its first few lines — and it reports the
+file's structure, column types, null counts and summary statistics.
+
+Parsing runs entirely in the browser. No data is uploaded, and the app has no
+server-side routes, no database and no third-party runtime dependencies beyond
+React and Next.js.
+
+## Features
+
+**Input**
+
+- Large paste area, or drag and drop / open a local file.
+- Four built-in samples (comma, pipe, triple pipe, tab).
+
+**Delimiters**
+
+- Comma `,`, pipe `|`, triple pipe `|||`, tab `\t` and semicolon `;`.
+- Auto-detection scores every candidate against the first 50 lines on row-to-row
+  field-count consistency, penalizing delimiters that manufacture empty fields.
+  That penalty is what keeps `|` from beating `|||` on triple-pipe data, where
+  splitting on a single pipe is perfectly consistent but wrong.
+- Manual override in the toolbar.
+
+**Parsing**
+
+- RFC 4180 quoting: quoted fields may contain delimiters, newlines and doubled
+  quotes (`""`).
+- CRLF and LF line endings; a trailing newline does not create a phantom row.
+- The first line is treated as a header by default; blank and duplicate header
+  names are backfilled (`column_3`) and suffixed (`id_2`) so every column stays
+  addressable.
+
+**Reported statistics**
+
+| Scope | Reported |
+| --- | --- |
+| File | Detected delimiter, data rows, physical lines, columns, total cells, populated cells, null/empty cells, character count, byte size, whether quoting was used, blank lines skipped |
+| Record | Row 1 rendered as key/value pairs, copyable as JSON |
+| Column | Inferred type, fill rate, null/empty count (split into blanks and null tokens), distinct count, min/max range, mean / median for numerics, min/max/avg length for text, date range, five most common values |
+| Preview | First 50 data rows in a scrollable table, with empty and whitespace-only cells marked |
+
+**Data-quality warnings**
+
+- Rows whose field count differs from the header (with line numbers).
+- Unterminated quoted fields — the usual sign of a paste truncated mid-record.
+- Duplicate header names, columns that are entirely empty, single-column results
+  (a wrong delimiter), and newlines embedded inside quoted fields.
+
+**Type inference** classifies a column as `integer`, `decimal`, `boolean`, `date`,
+`text` or `empty` when at least 95% of its non-null values agree, so a handful of
+dirty cells does not hide a column's real type. Numbers written with thousands
+separators (`1,234.50`), a currency prefix (`$99`) or accounting negatives
+(`(88.20)`) are read as numeric.
+
+**Null handling** counts empty strings as missing always, and `NULL`, `NA`,
+`N/A`, `NIL`, `NONE`, `NAN`, `\N`, `#N/A` and `UNDEFINED` as missing when the
+"treat NULL/NA/N/A as null" toggle is on. The column table separates the two.
+
+## Running locally
+
+```bash
+npm install
+npm run dev      # http://localhost:3000
+```
+
+Other scripts:
+
+```bash
+npm run build      # production build
+npm start          # serve the production build
+npm test           # unit tests for the parser and profiler (node:test)
+npm run typecheck  # tsc --noEmit
+```
+
+## Deploying to Vercel
+
+The app is a stock Next.js App Router project, so Vercel needs no configuration:
+import the repository at [vercel.com/new](https://vercel.com/new) and accept the
+detected framework preset (build command `next build`, output `.next`). Both
+routes prerender as static content, so it runs on the free tier with no
+serverless functions.
+
+From the CLI instead:
+
+```bash
+npm i -g vercel
+vercel          # preview deployment
+vercel --prod   # production deployment
+```
+
+## Project layout
+
+```
+app/
+  layout.tsx        root layout and metadata
+  page.tsx          server component shell
+  globals.css       all styling (light and dark, no CSS framework)
+  icon.svg          favicon
+components/
+  Analyzer.tsx      client component: input, toolbar, state
+  Overview.tsx      file-level tiles and data-quality notices
+  FirstRecord.tsx   row 1 as key/value pairs
+  ColumnStats.tsx   per-column profile table
+  DataPreview.tsx   scrollable row preview
+lib/
+  csv.ts            parser and delimiter detection
+  stats.ts          type inference and column profiling
+  format.ts         display formatting
+  samples.ts        built-in sample datasets
+tests/
+  csv.test.ts       unit tests
+```
+
+## Limits
+
+- Input over 5,000,000 characters is clipped, and the app says so.
+- Column profiling covers the first 20,000 data rows; row and line counts still
+  reflect the whole input, and the app reports when profiling was capped.
+- Parsing is synchronous on the main thread. 100,000 rows (~4.4 MB) parse and
+  profile in roughly 350 ms; React's `useDeferredValue` keeps typing responsive
+  above that.
