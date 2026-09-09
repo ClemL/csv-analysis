@@ -12,7 +12,13 @@ React and Next.js.
 
 **Input**
 
+- Two modes: **Analyze** one file, or **Compare two files** side by side.
 - Large paste area, or drag and drop / open a local file.
+- Opened files are decoded from their bytes, not assumed to be UTF-8. A
+  byte-order mark wins; otherwise strict UTF-8 is tried and Windows-1252 is the
+  fallback, with a notice saying so and a manual override. This matters: reading
+  a Windows-1252 extract as UTF-8 turns `Café` into `Caf<?>` and carries the
+  corruption into the generated SQL.
 - Four built-in samples (comma, pipe, triple pipe, tab) behind a **Samples** menu.
 - Every section collapses from its header, and the open/closed state is
   remembered per browser via `localStorage`. Parse settings sit outside the
@@ -43,11 +49,33 @@ React and Next.js.
 | --- | --- |
 | File | Detected delimiter, data rows, physical lines, columns, total cells, populated cells, null/empty cells, character count, byte size, whether quoting was used, blank lines skipped |
 | Record | Row 1 rendered as key/value pairs, copyable as JSON |
-| Column | Inferred type, fill rate, null/empty count (split into blanks and null tokens), distinct count, min/max range, mean / median for numerics, min/max/avg length for text, date range, five most common values |
+| Column | Inferred type, fill rate, null/empty count (split into blanks and null tokens), distinct count, min/max range, mean / median for numerics, min/max/avg length for text, date range, five most common values, whether it can serve as a key, and the values that do not fit its type |
 | Preview | First 50 data rows in a scrollable table, with empty and whitespace-only cells marked |
 
 **Azure SQL** — an optional "SQL types (Azure SQL)" setting adds an inferred
 T-SQL type per column and a script generator. See below.
+
+**Keys and duplicates** — columns that are unique and fully populated are marked
+`key`; rows that repeat an earlier row field-for-field are counted, with the most
+repeated shown. "What is the grain, and are there duplicates" is the first
+question anyone asks of a vendor extract.
+
+**Values that do not fit their type** — type inference needs 95% agreement, which
+on a 20,000-row profile leaves room for up to 1,000 dissenting values that are
+exactly the rows that break a load. Any column with dissenters shows a count next
+to its type; clicking expands the offending values. A column that *misses* the
+threshold is handled too: 93% integers lands in `text`, and the app says
+`93.0% integer` and lists the 7% that are not, rather than silently calling the
+column text.
+
+**Possible PHI or personal data** — columns that look like SSNs, dates of birth,
+medical record numbers, member or patient identifiers, NPIs, emails, phone
+numbers, names or addresses raise a banner and a `phi?` badge. Header names and
+value patterns are both used; NPIs are validated by their Luhn check digit
+(against the `80840` issuer prefix) and SSN and phone patterns require real
+formatting, so a bare run of digits — an account number, an NDC, a claim ID — does
+not flag. A postal code alone is not treated as identifying, only in company with
+something else.
 
 **Data-quality warnings**
 
@@ -65,6 +93,21 @@ separators (`1,234.50`), a currency prefix (`$99`) or accounting negatives
 **Null handling** counts empty strings as missing always, and `NULL`, `NA`,
 `N/A`, `NIL`, `NONE`, `NAN`, `\N`, `#N/A` and `UNDEFINED` as missing when the
 "treat NULL/NA/N/A as null" toggle is on. The column table separates the two.
+
+## Compare mode
+
+Two pastes, parsed under the same settings, for reconciling the same period from
+two sources.
+
+- **Schema** — columns only in A, only in B, and how each shared column moved:
+  type changes, fill-rate drift over one percentage point, distinct counts, and
+  for numerics the range, mean and sum.
+- **Rows** — matched on a column that is unique and fully populated on both
+  sides, chosen automatically or picked from the dropdown. Reports how many rows
+  are in both, which keys are only in A, which only in B, and — the useful part —
+  rows present on both sides whose other fields disagree, field by field.
+- If the chosen column repeats within a side it is not really a key, and the app
+  says so rather than quietly comparing the first row it saw.
 
 ## SQL script generation
 
@@ -92,6 +135,13 @@ downloaded as `.sql`.
 | no values at all | `NVARCHAR(255) NULL` | nothing to infer from |
 
 A column is `NOT NULL` only when nothing in the sample was missing.
+
+### Staging widths
+
+The **Staging widths** toggle widens every inference for a landing table: one
+more length bucket, four extra digits of decimal precision instead of two, the
+next integer width up, and every column nullable. A staging table's job is to
+accept the file, not to reject rows the sample did not predict.
 
 Two cases deserve attention because they are the usual way a CSV import loses
 data silently:
@@ -163,6 +213,9 @@ components/
   Analyzer.tsx      client component: input, toolbar, state
   Panel.tsx         collapsible section with remembered state
   Menu.tsx          dropdown menu button
+  InputPanel.tsx    paste area, file opening and byte decoding
+  CompareView.tsx   schema and row reconciliation between two datasets
+  useDataset.ts     parse, profile, SQL types and PHI scan for one dataset
   Overview.tsx      file-level tiles and data-quality notices
   FirstRecord.tsx   row 1 as key/value pairs
   ColumnStats.tsx   per-column profile table
@@ -172,11 +225,17 @@ lib/
   csv.ts            parser and delimiter detection
   stats.ts          type inference and column profiling
   sql.ts            Azure SQL type inference and script generation
+  encoding.ts       byte-order marks and encoding fallback
+  phi.ts            PHI and personal-identifier heuristics
+  diff.ts           comparison of two datasets
   format.ts         display formatting
   samples.ts        built-in sample datasets
 tests/
   csv.test.ts       parser and profiler tests
   sql.test.ts       SQL inference and script generation tests
+  encoding.test.ts  decoding and fallback tests
+  phi.test.ts       identifier-detection tests, including false positives
+  diff.test.ts      comparison tests
 ```
 
 ## Limits

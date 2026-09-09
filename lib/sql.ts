@@ -170,31 +170,45 @@ function collectHints(values: string[]): Hints {
 /** Character-length buckets, so a sample leaves room for the rest of the file. */
 const LENGTH_BUCKETS = [10, 20, 50, 100, 200, 255, 500, 1000, 2000, 4000, 8000];
 
-function bucketLength(maxLength: number, limit: number): string {
-  for (const bucket of LENGTH_BUCKETS) {
-    if (bucket > limit) break;
-    if (maxLength <= bucket) return String(bucket);
-  }
-  return 'MAX';
+/** `extra` skips that many further buckets, for staging headroom. */
+function bucketLength(maxLength: number, limit: number, extra = 0): string {
+  const usable = LENGTH_BUCKETS.filter((bucket) => bucket <= limit);
+  const index = usable.findIndex((bucket) => maxLength <= bucket);
+  if (index === -1) return 'MAX';
+  const widened = index + extra;
+  return widened < usable.length ? String(usable[widened]) : 'MAX';
 }
 
-function characterType(hints: Hints): { type: string; literal: LiteralKind; rationale: string } {
+function characterType(
+  hints: Hints,
+  staging: boolean,
+): { type: string; literal: LiteralKind; rationale: string } {
   const unicode = !hints.asciiOnly;
   const limit = unicode ? 4000 : 8000;
-  const length = bucketLength(Math.max(hints.maxLength, 1), limit);
+  const length = bucketLength(Math.max(hints.maxLength, 1), limit, staging ? 1 : 0);
   const base = unicode ? 'NVARCHAR' : 'VARCHAR';
   return {
     type: `${base}(${length})`,
     literal: unicode ? 'unicode' : 'string',
     rationale:
       `longest value ${hints.maxLength} chars, rounded up to ${length}` +
+      (staging ? ' with a staging bucket of headroom' : '') +
       (unicode ? '; non-ASCII characters present' : '; ASCII only'),
   };
+}
+
+/** Integer widths in ascending order, for the staging bump. */
+const INT_WIDTHS = ['TINYINT', 'SMALLINT', 'INT', 'BIGINT'] as const;
+
+function widenInteger(type: string): string {
+  const index = INT_WIDTHS.indexOf(type as (typeof INT_WIDTHS)[number]);
+  return index >= 0 && index < INT_WIDTHS.length - 1 ? INT_WIDTHS[index + 1] : type;
 }
 
 function inferType(
   profile: ColumnProfile,
   hints: Hints,
+  staging: boolean,
 ): { type: string; literal: LiteralKind; rationale: string } {
   if (profile.filled === 0) {
     return {
@@ -214,7 +228,7 @@ function inferType(
 
   if (profile.type === 'integer') {
     if (hints.leadingZeros) {
-      const char = characterType(hints);
+      const char = characterType(hints, staging);
       return { ...char, rationale: `${char.rationale}; leading zeros would be lost as an integer` };
     }
     if (hints.maxIntDigits > 18) {
@@ -226,16 +240,21 @@ function inferType(
     }
     const { minValue, maxValue } = hints;
     const range = `range ${minValue} … ${maxValue}`;
-    if (minValue >= 0 && maxValue <= 255) {
-      return { type: 'TINYINT', literal: 'number', rationale: `${range} fits TINYINT` };
-    }
-    if (minValue >= -32768 && maxValue <= 32767) {
-      return { type: 'SMALLINT', literal: 'number', rationale: `${range} fits SMALLINT` };
-    }
-    if (minValue >= -2147483648 && maxValue <= 2147483647) {
-      return { type: 'INT', literal: 'number', rationale: `${range} fits INT` };
-    }
-    return { type: 'BIGINT', literal: 'number', rationale: `${range} needs BIGINT` };
+    const fitted =
+      minValue >= 0 && maxValue <= 255
+        ? 'TINYINT'
+        : minValue >= -32768 && maxValue <= 32767
+          ? 'SMALLINT'
+          : minValue >= -2147483648 && maxValue <= 2147483647
+            ? 'INT'
+            : 'BIGINT';
+    const type = staging ? widenInteger(fitted) : fitted;
+    return {
+      type,
+      literal: 'number',
+      rationale:
+        type === fitted ? `${range} fits ${fitted}` : `${range} fits ${fitted}, widened for staging`,
+    };
   }
 
   if (profile.type === 'decimal') {
@@ -243,14 +262,17 @@ function inferType(
       return { type: 'FLOAT', literal: 'number', rationale: 'values use scientific notation' };
     }
     const scale = Math.min(hints.maxScale, 10);
-    const precision = Math.min(Math.max(hints.maxIntDigits + scale, 1) + 2, 38);
+    const headroom = staging ? 6 : 2;
+    const precision = Math.min(Math.max(hints.maxIntDigits + scale, 1) + headroom, 38);
     if (precision - scale < hints.maxIntDigits) {
       return { type: 'FLOAT', literal: 'number', rationale: 'precision exceeds DECIMAL(38, n)' };
     }
     return {
       type: `DECIMAL(${precision},${scale})`,
       literal: 'number',
-      rationale: `${hints.maxIntDigits} integer digit(s), ${scale} decimal place(s), plus headroom`,
+      rationale:
+        `${hints.maxIntDigits} integer digit(s), ${scale} decimal place(s), ` +
+        `plus ${headroom} digits of ${staging ? 'staging ' : ''}headroom`,
     };
   }
 
@@ -278,7 +300,7 @@ function inferType(
     };
   }
 
-  return characterType(hints);
+  return characterType(hints, staging);
 }
 
 /** Values in one column, with nulls and blanks removed. */
@@ -292,17 +314,28 @@ function columnValues(analysis: Analysis, index: number): string[] {
   return values;
 }
 
-export function inferSqlColumns(analysis: Analysis): SqlColumn[] {
+export interface InferOptions {
+  /**
+   * Widens every inference for a landing table: one more length bucket, four
+   * more digits of decimal precision, the next integer width, and every column
+   * nullable. A staging table should accept the file, not reject rows the
+   * sample did not predict.
+   */
+  staging?: boolean;
+}
+
+export function inferSqlColumns(analysis: Analysis, options: InferOptions = {}): SqlColumn[] {
+  const staging = options.staging ?? false;
   return analysis.columns.map((profile) => {
     const hints = collectHints(columnValues(analysis, profile.index));
-    const { type, literal, rationale } = inferType(profile, hints);
+    const { type, literal, rationale } = inferType(profile, hints, staging);
     return {
       name: profile.name,
       identifier: quoteIdentifier(profile.name),
       type,
-      nullable: profile.missing > 0 || profile.filled === 0,
+      nullable: staging || profile.missing > 0 || profile.filled === 0,
       literal,
-      rationale,
+      rationale: staging && profile.missing === 0 ? `${rationale}; nullable for staging` : rationale,
     };
   });
 }

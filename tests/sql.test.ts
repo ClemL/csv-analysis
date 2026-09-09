@@ -147,3 +147,30 @@ test('warns about ambiguous m/d/y date literals', () => {
   assert.equal(columns[0].type, 'DATE');
   assert.ok(buildScript(analysis, columns, 'T').notes.some((n) => n.includes('DATEFORMAT')));
 });
+
+test('staging mode widens every inference and drops NOT NULL', () => {
+  const analysis = analyze('id,name,amount\n1,foo,12.45\n2,bar,9.10', options);
+  assert.ok(analysis);
+
+  const tight = inferSqlColumns(analysis);
+  assert.deepEqual(
+    tight.map((c) => `${c.type} ${c.nullable ? 'NULL' : 'NOT NULL'}`),
+    ['TINYINT NOT NULL', 'VARCHAR(10) NOT NULL', 'DECIMAL(6,2) NOT NULL'],
+  );
+
+  const staged = inferSqlColumns(analysis, { staging: true });
+  assert.deepEqual(
+    staged.map((c) => `${c.type} ${c.nullable ? 'NULL' : 'NOT NULL'}`),
+    ['SMALLINT NULL', 'VARCHAR(20) NULL', 'DECIMAL(10,2) NULL'],
+  );
+});
+
+test('staging widening saturates rather than overflowing', () => {
+  const wide = analyze(`s\n${'x'.repeat(7000)}`, options);
+  assert.ok(wide);
+  assert.equal(inferSqlColumns(wide, { staging: true })[0].type, 'VARCHAR(MAX)');
+
+  const big = analyze('n\n9000000000', options);
+  assert.ok(big);
+  assert.equal(inferSqlColumns(big, { staging: true })[0].type, 'BIGINT', 'already the widest');
+});

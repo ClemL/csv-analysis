@@ -66,9 +66,13 @@ function ScriptBox({
 export function SqlPanel({
   analysis,
   columns,
+  staging,
+  onStagingChange,
 }: {
   analysis: Analysis;
   columns: SqlColumn[];
+  staging: boolean;
+  onStagingChange: (value: boolean) => void;
 }) {
   const [tableName, setTableName] = useState('dbo.ImportedData');
   const [script, setScript] = useState<SqlScript | null>(null);
@@ -87,6 +91,17 @@ export function SqlPanel({
       title="SQL script (Azure SQL)"
       actions={
         <div className="script-controls">
+          <label
+            className="field"
+            title="Widen every type for a landing table: one more length bucket, four more digits of decimal precision, the next integer width, and every column nullable."
+          >
+            <input
+              type="checkbox"
+              checked={staging}
+              onChange={(e) => onStagingChange(e.target.checked)}
+            />
+            Staging widths
+          </label>
           <label className="field">
             Table
             <input

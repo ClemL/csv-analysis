@@ -161,3 +161,55 @@ test('treats every line as data when the header toggle is off', () => {
 test('returns null for blank input', () => {
   assert.equal(analyze('   \n  ', options), null);
 });
+
+test('collects the values that dissent from a column type', () => {
+  // 60 integers and 3 strays: 95.2% agreement, so the column still claims integer.
+  const rows = ['n', ...Array.from({ length: 60 }, (_, i) => String(i)), 'oops', 'oops', 'n/aa'];
+  const result = analyze(rows.join('\n'), options);
+  assert.equal(result?.columns[0].type, 'integer');
+  assert.equal(result?.columns[0].mismatchCount, 3);
+  assert.deepEqual(result?.columns[0].mismatches, [
+    { value: 'oops', count: 2 },
+    { value: 'n/aa', count: 1 },
+  ]);
+});
+
+test('a column that misses the threshold still reports its near-miss type', () => {
+  // 40 integers and 3 strays: 93% agreement falls short, so the type is text.
+  const rows = ['n', ...Array.from({ length: 40 }, (_, i) => String(i)), 'oops', 'oops', 'n/aa'];
+  const column = analyze(rows.join('\n'), options)?.columns[0];
+  assert.equal(column?.type, 'text');
+  assert.equal(column?.nearType, 'integer');
+  assert.ok(column && column.nearShare! > 0.92 && column.nearShare! < 0.94);
+  assert.equal(column?.mismatchCount, 3);
+});
+
+test('a genuinely textual column reports no near-miss', () => {
+  const column = analyze('s\nfoo\nbar\nbaz\n42', options)?.columns[0];
+  assert.equal(column?.type, 'text');
+  assert.equal(column?.nearType, undefined);
+  assert.equal(column?.mismatchCount, 0);
+});
+
+test('identifies columns usable as a key', () => {
+  const result = analyze('id,grp,partial\n1,a,x\n2,a,\n3,b,z', options);
+  assert.deepEqual(result?.candidateKeys, [0]);
+  assert.equal(result?.columns[0].isCandidateKey, true);
+  assert.equal(result?.columns[1].isCandidateKey, false, 'repeated values');
+  assert.equal(result?.columns[2].isCandidateKey, false, 'has a blank');
+});
+
+test('counts rows that repeat an earlier row exactly', () => {
+  const result = analyze('a,b\n1,x\n2,y\n1,x\n1,x\n3,z', options);
+  assert.equal(result?.duplicateRows, 2);
+  assert.equal(result?.duplicateGroups, 1);
+  assert.equal(result?.duplicateSamples[0].count, 3);
+  assert.equal(result?.duplicateSamples[0].preview, '1, x');
+  assert.deepEqual(result?.candidateKeys, []);
+});
+
+test('reports no duplicates when every row is distinct', () => {
+  const result = analyze('a\n1\n2\n3', options);
+  assert.equal(result?.duplicateRows, 0);
+  assert.equal(result?.duplicateGroups, 0);
+});

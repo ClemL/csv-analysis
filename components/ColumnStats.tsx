@@ -1,5 +1,9 @@
+'use client';
+
+import { useState } from 'react';
 import type { Analysis, ColumnProfile } from '@/lib/stats';
 import type { SqlColumn } from '@/lib/sql';
+import type { PhiFinding } from '@/lib/phi';
 import { formatInt, formatNumber, formatPercent } from '@/lib/format';
 import { Panel } from './Panel';
 
@@ -31,14 +35,45 @@ function central(col: ColumnProfile): string {
   return `mean ${formatNumber(col.numeric.mean)} · median ${formatNumber(col.numeric.median)}`;
 }
 
+/** The type cell, which expands to show values that do not fit the type. */
+function TypeCell({
+  col,
+  expanded,
+  onToggle,
+}: {
+  col: ColumnProfile;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const badge = <span className={`badge type-${col.type}`}>{col.type}</span>;
+
+  if (col.mismatchCount === 0) return badge;
+
+  return (
+    <button type="button" className="type-expand" onClick={onToggle} aria-expanded={expanded}>
+      {badge}
+      <span className="mismatch-count">
+        {col.nearType ? `${formatPercent(col.nearShare ?? 0)} ${col.nearType}` : null}{' '}
+        {formatInt(col.mismatchCount)} off
+      </span>
+    </button>
+  );
+}
+
 export function ColumnStats({
   analysis,
   sqlColumns,
+  phi = [],
 }: {
   analysis: Analysis;
   /** Present only while the SQL types setting is on. */
   sqlColumns?: SqlColumn[];
+  phi?: PhiFinding[];
 }) {
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const phiByColumn = new Map(phi.map((f) => [f.columnIndex, f]));
+  const columnCount = 9 + (sqlColumns ? 1 : 0);
+
   return (
     <Panel
       id="columns"
@@ -64,40 +99,90 @@ export function ColumnStats({
             </tr>
           </thead>
           <tbody>
-            {analysis.columns.map((col) => (
-              <tr key={col.index}>
-                <td className="num">{col.index + 1}</td>
-                <td className="mono">{col.name}</td>
-                <td>
-                  <span className={`badge type-${col.type}`}>{col.type}</span>
-                </td>
-                {sqlColumns ? (
-                  <td className="mono sql-type" title={sqlColumns[col.index]?.rationale}>
-                    {sqlColumns[col.index]?.type}{' '}
-                    <span className="faint">
-                      {sqlColumns[col.index]?.nullable ? 'NULL' : 'NOT NULL'}
-                    </span>
+            {analysis.columns.map((col) => {
+              const flag = phiByColumn.get(col.index);
+              const isOpen = expanded === col.index;
+              return [
+                <tr key={col.index}>
+                  <td className="num">{col.index + 1}</td>
+                  <td className="mono">
+                    {col.name}
+                    {col.isCandidateKey ? (
+                      <span className="badge key" title="Unique and fully populated">
+                        key
+                      </span>
+                    ) : null}
+                    {flag ? (
+                      <span className="badge phi" title={`${flag.label} — matched by ${flag.basis}`}>
+                        phi?
+                      </span>
+                    ) : null}
                   </td>
-                ) : null}
-                <td>
-                  <FillBar rate={col.fillRate} />
-                </td>
-                <td className="num">
-                  {formatInt(col.missing)}
-                  {col.nullToken > 0 ? (
-                    <span className="faint"> ({formatInt(col.nullToken)} token)</span>
+                  <td>
+                    <TypeCell
+                      col={col}
+                      expanded={isOpen}
+                      onToggle={() => setExpanded(isOpen ? null : col.index)}
+                    />
+                  </td>
+                  {sqlColumns ? (
+                    <td className="mono sql-type" title={sqlColumns[col.index]?.rationale}>
+                      {sqlColumns[col.index]?.type}{' '}
+                      <span className="faint">
+                        {sqlColumns[col.index]?.nullable ? 'NULL' : 'NOT NULL'}
+                      </span>
+                    </td>
                   ) : null}
-                </td>
-                <td className="num">{formatInt(col.distinct)}</td>
-                <td>{range(col)}</td>
-                <td>{central(col)}</td>
-                <td className="top-values">
-                  {col.topValues.length
-                    ? col.topValues.map((v) => `${v.value} (${v.count})`).join(', ')
-                    : '—'}
-                </td>
-              </tr>
-            ))}
+                  <td>
+                    <FillBar rate={col.fillRate} />
+                  </td>
+                  <td className="num">
+                    {formatInt(col.missing)}
+                    {col.nullToken > 0 ? (
+                      <span className="faint"> ({formatInt(col.nullToken)} token)</span>
+                    ) : null}
+                  </td>
+                  <td className="num">{formatInt(col.distinct)}</td>
+                  <td>{range(col)}</td>
+                  <td>{central(col)}</td>
+                  <td className="top-values">
+                    {col.topValues.length
+                      ? col.topValues.map((v) => `${v.value} (${v.count})`).join(', ')
+                      : '—'}
+                  </td>
+                </tr>,
+                isOpen ? (
+                  <tr key={`${col.index}-detail`} className="detail-row">
+                    <td colSpan={columnCount}>
+                      <div className="detail">
+                        <strong>
+                          {formatInt(col.mismatchCount)} value(s) in {col.name} do not fit{' '}
+                          {col.nearType ?? col.type}
+                          {col.nearType
+                            ? ` — ${formatPercent(col.nearShare ?? 0)} of values do, short of the 95% needed to claim the type`
+                            : null}
+                          :
+                        </strong>
+                        <ul className="mismatch-list">
+                          {col.mismatches.map((m) => (
+                            <li key={m.value}>
+                              <code>{m.value === '' ? '(empty)' : m.value}</code>
+                              {m.count > 1 ? <span className="faint"> ×{m.count}</span> : null}
+                            </li>
+                          ))}
+                        </ul>
+                        {col.mismatchCount > col.mismatches.length ? (
+                          <span className="faint">
+                            Showing the {col.mismatches.length} most common of{' '}
+                            {formatInt(col.mismatchCount)}.
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ) : null,
+              ];
+            })}
           </tbody>
         </table>
       </div>

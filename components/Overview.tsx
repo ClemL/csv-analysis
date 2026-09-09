@@ -1,4 +1,5 @@
 import type { Analysis } from '@/lib/stats';
+import type { PhiFinding } from '@/lib/phi';
 import { formatBytes, formatInt, formatPercent } from '@/lib/format';
 
 function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -11,7 +12,15 @@ function Tile({ label, value, hint }: { label: string; value: string; hint?: str
   );
 }
 
-export function Overview({ analysis, autoDetected }: { analysis: Analysis; autoDetected: boolean }) {
+export function Overview({
+  analysis,
+  autoDetected,
+  phi,
+}: {
+  analysis: Analysis;
+  autoDetected: boolean;
+  phi: PhiFinding[];
+}) {
   const notices: { tone: 'info' | 'warn' | 'bad'; text: string }[] = [];
 
   if (analysis.unterminatedQuote) {
@@ -55,6 +64,35 @@ export function Overview({ analysis, autoDetected }: { analysis: Analysis; autoD
     });
   }
 
+  if (analysis.duplicateRows > 0) {
+    const sample = analysis.duplicateSamples[0];
+    notices.push({
+      tone: 'warn',
+      text:
+        `${formatInt(analysis.duplicateRows)} row(s) repeat an earlier row exactly, across ` +
+        `${formatInt(analysis.duplicateGroups)} distinct value(s)` +
+        (sample ? ` — the most repeated appears ${sample.count} times: ${sample.preview}` : '') +
+        '.',
+    });
+  }
+  if (analysis.candidateKeys.length === 0 && analysis.dataRowCount > 1) {
+    notices.push({
+      tone: 'info',
+      text: 'No single column is unique and fully populated, so this file has no natural key.',
+    });
+  }
+
+  const withMismatches = analysis.columns.filter((c) => c.mismatchCount > 0);
+  if (withMismatches.length > 0) {
+    notices.push({
+      tone: 'warn',
+      text:
+        `${withMismatches.length} column(s) contain values that do not fit their type: ` +
+        `${withMismatches.map((c) => `${c.name} (${formatInt(c.mismatchCount)})`).join(', ')}. ` +
+        'Expand the type in the columns table to see them.',
+    });
+  }
+
   const emptyColumns = analysis.columns.filter((c) => c.filled === 0).length;
   if (emptyColumns > 0) {
     notices.push({
@@ -63,8 +101,21 @@ export function Overview({ analysis, autoDetected }: { analysis: Analysis; autoD
     });
   }
 
+  const keyNames = analysis.candidateKeys.map((i) => analysis.headers[i]);
+
   return (
     <>
+      {phi.length > 0 ? (
+        <div className="panel-body" style={{ paddingBottom: 0 }}>
+          <div className="notice phi">
+            <strong>Possible PHI or personal data.</strong> These columns look identifying:{' '}
+            {phi.map((f) => `${f.columnName} (${f.label.toLowerCase()})`).join(', ')}. This page
+            parses in your browser and sends nothing anywhere, but treat the generated SQL and
+            anything you copy out of here accordingly.
+          </div>
+        </div>
+      ) : null}
+
       <div className="tiles">
         <Tile
           label="Delimiter"
@@ -104,6 +155,20 @@ export function Overview({ analysis, autoDetected }: { analysis: Analysis; autoD
           label="Quoted fields"
           value={analysis.hasQuotedFields ? 'Yes' : 'No'}
           hint={analysis.hasQuotedFields ? 'RFC 4180 quoting applied' : 'No quoting detected'}
+        />
+        <Tile
+          label="Duplicate rows"
+          value={formatInt(analysis.duplicateRows)}
+          hint={
+            analysis.duplicateRows
+              ? `${formatInt(analysis.duplicateGroups)} repeated value(s)`
+              : 'every row is distinct'
+          }
+        />
+        <Tile
+          label="Candidate keys"
+          value={keyNames.length ? String(keyNames.length) : 'None'}
+          hint={keyNames.length ? keyNames.slice(0, 3).join(', ') : 'no column is unique'}
         />
         <Tile
           label="Blank lines"
