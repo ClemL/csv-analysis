@@ -7,6 +7,8 @@ import {
   normalizeHeaders,
   parseDelimited,
   scoreDelimiters,
+  serializeDelimited,
+  DELIMITERS,
 } from '../lib/csv.ts';
 import { analyze, toNumber } from '../lib/stats.ts';
 
@@ -212,4 +214,30 @@ test('reports no duplicates when every row is distinct', () => {
   const result = analyze('a\n1\n2\n3', options);
   assert.equal(result?.duplicateRows, 0);
   assert.equal(result?.duplicateGroups, 0);
+});
+
+test('serializes rows back to delimited text, quoting only where needed', () => {
+  const rows = [
+    ['a', 'b', 'c'],
+    ['plain', 'has,comma', 'has"quote'],
+    ['multi\nline', '', 'x'],
+  ];
+  const text = serializeDelimited(rows, ',');
+  assert.equal(
+    text,
+    'a,b,c\nplain,"has,comma","has""quote"\n"multi\nline",,x',
+  );
+});
+
+test('serialize and parse round-trip for every delimiter', () => {
+  const rows = [
+    ['id', 'note', 'amount'],
+    ['1', 'plain', '10'],
+    ['2', 'with , comma | pipe ||| triple\ttab', '20'],
+    ['3', 'with "quotes" and\nnewline', ''],
+  ];
+  for (const option of DELIMITERS) {
+    const text = serializeDelimited(rows, option.value);
+    assert.deepEqual(parseDelimited(text, option.value).rows, rows, option.label);
+  }
 });

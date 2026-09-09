@@ -217,3 +217,23 @@ export function normalizeHeaders(raw: string[]): { headers: string[]; duplicates
   });
   return { headers, duplicates };
 }
+
+/**
+ * Writes rows back out as delimited text — the inverse of `parseDelimited`.
+ * A field is quoted only when it has to be: when it contains the delimiter,
+ * a quote or a line break.
+ */
+export function serializeDelimited(rows: string[][], delimiter: string, quote = '"'): string {
+  const needsQuoting = (field: string) =>
+    field.includes(delimiter) || field.includes(quote) || /[\r\n]/.test(field);
+
+  return rows
+    .map((row) =>
+      row
+        .map((field) =>
+          needsQuoting(field) ? `${quote}${field.split(quote).join(quote + quote)}${quote}` : field,
+        )
+        .join(delimiter),
+    )
+    .join('\n');
+}

@@ -1,11 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { SAMPLES } from '@/lib/samples';
 import { formatInt } from '@/lib/format';
 import { decodeBytes, encodingLabel, type EncodingId } from '@/lib/encoding';
 import { Panel } from './Panel';
-import { Menu } from './Menu';
 
 const PLACEHOLDER = `Paste a CSV here — the full file or just the first few lines.
 
@@ -13,7 +11,8 @@ claim_id,ndc,fill_date,quantity,unit_cost
 10001,00093-7146-56,2026-01-04,30,12.45
 10002,00378-3855-93,2026-01-04,90,4.10
 
-Comma, pipe, triple pipe (|||), tab and semicolon are all recognized.`;
+Comma, pipe, triple pipe (|||), tab and semicolon are all recognized.
+No sample handy? The Generate tab builds one from the openFDA NDC directory.`;
 
 export function InputPanel({
   id,
@@ -87,18 +86,6 @@ export function InputPanel({
       footer={footer}
       actions={
         <>
-          <Menu
-            label="Samples"
-            items={SAMPLES.map((sample) => ({
-              label: sample.label,
-              hint: sample.hint,
-              onSelect: () => {
-                setBytes(null);
-                setDecoded(undefined);
-                onText(sample.text);
-              },
-            }))}
-          />
           <button type="button" onClick={() => fileInput.current?.click()}>
             Open file
           </button>

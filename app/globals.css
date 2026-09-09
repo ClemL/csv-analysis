@@ -881,3 +881,60 @@ td.cell-b {
   margin: 8px 0 0;
   font-size: 12px;
 }
+
+/* Sample data generator */
+
+.generator-toolbar {
+  border-top: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.field.grow {
+  flex: 1 1 200px;
+  min-width: 160px;
+}
+
+.field.grow input[type='text'] {
+  width: 100%;
+}
+
+.generator-toolbar input[type='text'],
+.generator-toolbar input[type='number'] {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.generator-toolbar input[type='number'] {
+  width: 92px;
+}
+
+.generator-toolbar input[type='text']:focus,
+.generator-toolbar input[type='number']:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.shape-note {
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  max-width: 88ch;
+}
+
+.shape-note:last-child {
+  margin-bottom: 0;
+}
+
+.shape-note code {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+}

@@ -12,14 +12,14 @@ React and Next.js.
 
 **Input**
 
-- Two modes: **Analyze** one file, or **Compare two files** side by side.
+- Three modes: **Analyze** one file, **Compare two files** side by side, or
+  **Generate sample data** from the openFDA drug directory.
 - Large paste area, or drag and drop / open a local file.
 - Opened files are decoded from their bytes, not assumed to be UTF-8. A
   byte-order mark wins; otherwise strict UTF-8 is tried and Windows-1252 is the
   fallback, with a notice saying so and a manual override. This matters: reading
   a Windows-1252 extract as UTF-8 turns `Café` into `Caf<?>` and carries the
   corruption into the generated SQL.
-- Four built-in samples (comma, pipe, triple pipe, tab) behind a **Samples** menu.
 - Every section collapses from its header, and the open/closed state is
   remembered per browser via `localStorage`. Parse settings sit outside the
   Input section's collapse, since they change what every other section reports.
@@ -93,6 +93,51 @@ separators (`1,234.50`), a currency prefix (`$99`) or accounting negatives
 **Null handling** counts empty strings as missing always, and `NULL`, `NA`,
 `N/A`, `NIL`, `NONE`, `NAN`, `\N`, `#N/A` and `UNDEFINED` as missing when the
 "treat NULL/NA/N/A as null" toggle is on. The column table separates the two.
+
+## Generate mode
+
+Builds a delimited file from the [openFDA National Drug Code
+directory](https://open.fda.gov/apis/drug/ndc/), so there is real data to try
+the analyzer on without pasting anything of your own.
+
+Search by brand name, generic name, labeler or dosage form (or leave it blank for
+anything), then choose a shape:
+
+- **Claims extract** — synthetic claim rows against real NDCs: `claim_id`,
+  `member_id`, `fill_date`, `ndc`, `brand_name`, `generic_name`, `quantity`,
+  `days_supply`, `unit_cost`, `total_cost`, `pharmacy`, `covered_entity`. The
+  drug data is genuine; members, costs and dates are fabricated. This shape
+  exercises every column type the profiler infers, and trips the PHI banner on
+  `member_id`, which is the point of a demo file.
+- **NDC directory** — the openFDA product records as they come: NDC, names,
+  labeler, dosage form, route, ingredient and strength, packaging.
+
+Row count, output delimiter and a seed are all adjustable; the same seed
+reproduces the same file. **Add imperfections** injects blank cells, a `NULL`
+token, a value that breaks its column's type, a field needing quotes, one short
+row and one exact duplicate — so every warning the analyzer can raise has
+something to find. The result can be copied, downloaded, or pushed straight into
+Analyze or either side of Compare.
+
+### The one network request
+
+This is the only request the application makes. It is outbound only and carries
+nothing but the search term; pasted and opened files are never transmitted. Two
+consequences worth knowing:
+
+- openFDA allows **240 requests per minute and 1,000 per day per IP address**
+  without an API key. A 429 is reported as a rate limit, not a generic failure.
+- `limit` is capped at 1,000 records per request, so asking for more rows than
+  that cycles the returned records rather than fetching more.
+- If you add a `Content-Security-Policy`, `connect-src` must allow
+  `https://api.fda.gov` rather than `'none'`. Everything else stays local.
+
+openFDA answers "no matches" with an HTTP 404 rather than an empty result set, so
+that case is reported as "No products matched that search" instead of an error.
+
+Every field of the response is treated as optional. A record with no
+`brand_name`, `packaging` or `active_ingredients` produces blank cells rather
+than a crash.
 
 ## Compare mode
 
@@ -215,6 +260,7 @@ components/
   Menu.tsx          dropdown menu button
   InputPanel.tsx    paste area, file opening and byte decoding
   CompareView.tsx   schema and row reconciliation between two datasets
+  GeneratorView.tsx openFDA search, sample shaping and output
   useDataset.ts     parse, profile, SQL types and PHI scan for one dataset
   Overview.tsx      file-level tiles and data-quality notices
   FirstRecord.tsx   row 1 as key/value pairs
@@ -228,14 +274,16 @@ lib/
   encoding.ts       byte-order marks and encoding fallback
   phi.ts            PHI and personal-identifier heuristics
   diff.ts           comparison of two datasets
+  ndc.ts            openFDA client and sample-file generators
   format.ts         display formatting
-  samples.ts        built-in sample datasets
 tests/
   csv.test.ts       parser and profiler tests
   sql.test.ts       SQL inference and script generation tests
   encoding.test.ts  decoding and fallback tests
   phi.test.ts       identifier-detection tests, including false positives
   diff.test.ts      comparison tests
+  ndc.test.ts       URL building and generator tests, against a fixture
+  fixtures/         a captured openFDA response, so tests need no network
 ```
 
 ## Limits

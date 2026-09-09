@@ -13,8 +13,15 @@ import { ColumnStats } from './ColumnStats';
 import { DataPreview } from './DataPreview';
 import { SqlPanel } from './SqlPanel';
 import { CompareView } from './CompareView';
+import { GeneratorView } from './GeneratorView';
 
-type Mode = 'analyze' | 'compare';
+type Mode = 'analyze' | 'compare' | 'generate';
+
+const MODE_LABELS: Record<Mode, string> = {
+  analyze: 'Analyze',
+  compare: 'Compare two files',
+  generate: 'Generate sample data',
+};
 
 function Clipped() {
   return (
@@ -40,6 +47,12 @@ export function Analyzer() {
 
   const a = useDataset(textA, settings);
   const b = useDataset(textB, settings);
+
+  const useGenerated = (target: 'analyze' | 'a' | 'b', text: string) => {
+    if (target === 'b') setTextB(text);
+    else setTextA(text);
+    setMode(target === 'analyze' ? 'analyze' : 'compare');
+  };
 
   const toolbar = (
     <div className="toolbar">
@@ -115,7 +128,7 @@ export function Analyzer() {
     <>
       <div className="modebar">
         <div className="segmented" role="tablist" aria-label="Mode">
-          {(['analyze', 'compare'] as Mode[]).map((value) => (
+          {(Object.keys(MODE_LABELS) as Mode[]).map((value) => (
             <button
               key={value}
               type="button"
@@ -124,7 +137,7 @@ export function Analyzer() {
               className={mode === value ? 'active' : undefined}
               onClick={() => setMode(value)}
             >
-              {value === 'analyze' ? 'Analyze' : 'Compare two files'}
+              {MODE_LABELS[value]}
             </button>
           ))}
         </div>
@@ -134,9 +147,16 @@ export function Analyzer() {
             unique in both.
           </span>
         ) : null}
+        {mode === 'generate' ? (
+          <span className="modebar-hint">
+            Real drug records from the openFDA NDC directory, shaped into a delimited file.
+          </span>
+        ) : null}
       </div>
 
-      {mode === 'analyze' ? (
+      {mode === 'generate' ? (
+        <GeneratorView onUse={useGenerated} />
+      ) : mode === 'analyze' ? (
         <>
           <InputPanel
             id="input"

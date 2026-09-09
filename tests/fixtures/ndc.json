@@ -1,0 +1,42 @@
+{
+  "meta": { "results": { "skip": 0, "limit": 3, "total": 12 } },
+  "results": [
+    {
+      "product_ndc": "0169-4132",
+      "product_type": "HUMAN PRESCRIPTION DRUG",
+      "brand_name": "Ozempic",
+      "generic_name": "semaglutide",
+      "dosage_form": "INJECTION, SOLUTION",
+      "route": ["SUBCUTANEOUS"],
+      "marketing_category": "NDA",
+      "marketing_start_date": "20180201",
+      "application_number": "NDA209637",
+      "labeler_name": "Novo Nordisk",
+      "active_ingredients": [{ "name": "SEMAGLUTIDE", "strength": "2 mg/1.5mL" }],
+      "packaging": [
+        { "package_ndc": "0169-4132-12", "description": "1 CARTON in 1 CARTON", "marketing_start_date": "20180201" }
+      ],
+      "pharm_class": ["GLP-1 Receptor Agonist [EPC]"]
+    },
+    {
+      "product_ndc": "0093-7214",
+      "brand_name": "",
+      "generic_name": "metformin hydrochloride",
+      "dosage_form": "TABLET, FILM COATED",
+      "route": ["ORAL"],
+      "marketing_category": "ANDA",
+      "marketing_start_date": "20030815",
+      "labeler_name": "Teva Pharmaceuticals USA, Inc.",
+      "active_ingredients": [{ "name": "METFORMIN HYDROCHLORIDE", "strength": "500 mg/1" }],
+      "packaging": [{ "package_ndc": "0093-7214-01", "description": "100 TABLET in 1 BOTTLE" }]
+    },
+    {
+      "product_ndc": "0378-3855",
+      "generic_name": "alprazolam",
+      "dosage_form": "TABLET",
+      "marketing_category": "ANDA",
+      "labeler_name": "Mylan Pharmaceuticals Inc.",
+      "dea_schedule": "CIV"
+    }
+  ]
+}
