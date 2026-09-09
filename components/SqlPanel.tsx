@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Analysis } from '@/lib/stats';
 import { buildScript, MAX_INSERT_ROWS, type SqlColumn, type SqlScript } from '@/lib/sql';
 import { formatInt } from '@/lib/format';
+import { Panel } from './Panel';
 
 function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
@@ -81,9 +82,10 @@ export function SqlPanel({
   );
 
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <h2>SQL script (Azure SQL)</h2>
+    <Panel
+      id="sql-script"
+      title="SQL script (Azure SQL)"
+      actions={
         <div className="script-controls">
           <label className="field">
             Table
@@ -99,8 +101,8 @@ export function SqlPanel({
             {script ? 'Regenerate' : 'Generate'}
           </button>
         </div>
-      </div>
-
+      }
+    >
       {script ? (
         <div className="panel-body">
           <div className="notices" style={{ marginBottom: script.notes.length ? 14 : 0 }}>
@@ -133,6 +135,6 @@ export function SqlPanel({
           .
         </div>
       )}
-    </section>
+    </Panel>
   );
 }

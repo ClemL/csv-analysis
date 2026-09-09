@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { Analysis } from '@/lib/stats';
 import { displayValue } from '@/lib/format';
+import { Panel } from './Panel';
 
 /** Renders row 1 as key/value pairs so the shape of a record is obvious. */
 export function FirstRecord({ analysis }: { analysis: Analysis }) {
@@ -23,13 +24,15 @@ export function FirstRecord({ analysis }: { analysis: Analysis }) {
   };
 
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <h2>First record</h2>
+    <Panel
+      id="first-record"
+      title="First record"
+      actions={
         <button type="button" onClick={copy}>
           {copied ? 'Copied' : 'Copy as JSON'}
         </button>
-      </div>
+      }
+    >
       <div className="kv">
         {analysis.firstRecord.map((f) => (
           <div className="kv-item" key={f.key}>
@@ -40,6 +43,6 @@ export function FirstRecord({ analysis }: { analysis: Analysis }) {
           </div>
         ))}
       </div>
-    </section>
+    </Panel>
   );
 }

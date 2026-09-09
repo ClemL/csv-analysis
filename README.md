@@ -13,7 +13,11 @@ React and Next.js.
 **Input**
 
 - Large paste area, or drag and drop / open a local file.
-- Four built-in samples (comma, pipe, triple pipe, tab).
+- Four built-in samples (comma, pipe, triple pipe, tab) behind a **Samples** menu.
+- Every section collapses from its header, and the open/closed state is
+  remembered per browser via `localStorage`. Parse settings sit outside the
+  Input section's collapse, since they change what every other section reports.
+  The Input section is pinned open while there is nothing to analyze.
 
 **Delimiters**
 
@@ -157,6 +161,8 @@ app/
   icon.svg          favicon
 components/
   Analyzer.tsx      client component: input, toolbar, state
+  Panel.tsx         collapsible section with remembered state
+  Menu.tsx          dropdown menu button
   Overview.tsx      file-level tiles and data-quality notices
   FirstRecord.tsx   row 1 as key/value pairs
   ColumnStats.tsx   per-column profile table

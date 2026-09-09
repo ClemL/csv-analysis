@@ -1,6 +1,7 @@
 import type { Analysis, ColumnProfile } from '@/lib/stats';
 import type { SqlColumn } from '@/lib/sql';
 import { formatInt, formatNumber, formatPercent } from '@/lib/format';
+import { Panel } from './Panel';
 
 function FillBar({ rate }: { rate: number }) {
   const tone = rate === 0 ? 'empty' : rate < 0.9 ? 'low' : '';
@@ -39,14 +40,13 @@ export function ColumnStats({
   sqlColumns?: SqlColumn[];
 }) {
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <h2>Columns</h2>
-        <span style={{ color: 'var(--text-muted)' }}>
-          {formatInt(analysis.columnCount)} columns over {formatInt(analysis.dataRowCount)} profiled
-          rows
-        </span>
-      </div>
+    <Panel
+      id="columns"
+      title="Columns"
+      meta={`${formatInt(analysis.columnCount)} columns over ${formatInt(
+        analysis.dataRowCount,
+      )} profiled rows`}
+    >
       <div className="scroll">
         <table>
           <thead>
@@ -101,6 +101,6 @@ export function ColumnStats({
           </tbody>
         </table>
       </div>
-    </section>
+    </Panel>
   );
 }

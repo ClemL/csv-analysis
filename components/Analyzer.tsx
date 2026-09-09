@@ -6,6 +6,8 @@ import { analyze } from '@/lib/stats';
 import { inferSqlColumns } from '@/lib/sql';
 import { SAMPLES } from '@/lib/samples';
 import { formatInt } from '@/lib/format';
+import { Panel } from './Panel';
+import { Menu } from './Menu';
 import { Overview } from './Overview';
 import { FirstRecord } from './FirstRecord';
 import { ColumnStats } from './ColumnStats';
@@ -59,7 +61,7 @@ export function Analyzer() {
   }, []);
 
   const onDrop = useCallback(
-    (event: React.DragEvent<HTMLDivElement>) => {
+    (event: React.DragEvent<HTMLElement>) => {
       event.preventDefault();
       setDragging(false);
       const file = event.dataTransfer.files?.[0];
@@ -68,24 +70,105 @@ export function Analyzer() {
     [readFile],
   );
 
+  // Settings stay visible when the input is collapsed: they change what every
+  // other section reports.
+  const settings = (
+    <div className="toolbar">
+      <label className="field">
+        Delimiter
+        <select value={delimiterId} onChange={(e) => setDelimiterId(e.target.value as DelimiterId)}>
+          <option value="auto">Auto-detect</option>
+          {DELIMITERS.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.label} ({d.display})
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="field">
+        <input
+          type="checkbox"
+          checked={hasHeader}
+          onChange={(e) => setHasHeader(e.target.checked)}
+        />
+        First line is a header
+      </label>
+
+      <label className="field">
+        <input
+          type="checkbox"
+          checked={trimFields}
+          onChange={(e) => setTrimFields(e.target.checked)}
+        />
+        Trim whitespace
+      </label>
+
+      <label className="field">
+        <input
+          type="checkbox"
+          checked={recognizeNullTokens}
+          onChange={(e) => setRecognizeNullTokens(e.target.checked)}
+        />
+        Treat NULL/NA/N/A as null
+      </label>
+
+      <label className="field">
+        <input
+          type="checkbox"
+          checked={showSqlTypes}
+          onChange={(e) => setShowSqlTypes(e.target.checked)}
+        />
+        SQL types (Azure SQL)
+      </label>
+    </div>
+  );
+
   return (
     <>
-      <section
-        className={`panel${dragging ? ' dropzone' : ''}`}
+      <Panel
+        id="input"
+        title="Input"
+        className={dragging ? 'dropzone' : undefined}
+        forceOpen={!text}
+        meta={text ? `${formatInt(text.length)} characters` : 'paste, or drop a file here'}
         onDragOver={(e) => {
           e.preventDefault();
           setDragging(true);
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
+        footer={settings}
+        actions={
+          <>
+            <Menu
+              label="Samples"
+              items={SAMPLES.map((sample) => ({
+                label: sample.label,
+                hint: sample.hint,
+                onSelect: () => setText(sample.text),
+              }))}
+            />
+            <button type="button" onClick={() => fileInput.current?.click()}>
+              Open file
+            </button>
+            <button type="button" onClick={() => setText('')} disabled={!text}>
+              Clear
+            </button>
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".csv,.tsv,.txt,.psv,text/*"
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) readFile(file);
+                e.target.value = '';
+              }}
+            />
+          </>
+        }
       >
-        <div className="panel-head">
-          <h2>Input</h2>
-          <span style={{ color: 'var(--text-muted)' }}>
-            {text ? `${formatInt(text.length)} characters` : 'paste, or drop a file anywhere here'}
-          </span>
-        </div>
-
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -93,85 +176,7 @@ export function Analyzer() {
           spellCheck={false}
           aria-label="Delimited text input"
         />
-
-        <div className="toolbar">
-          <label className="field">
-            Delimiter
-            <select
-              value={delimiterId}
-              onChange={(e) => setDelimiterId(e.target.value as DelimiterId)}
-            >
-              <option value="auto">Auto-detect</option>
-              {DELIMITERS.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.label} ({d.display})
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field">
-            <input
-              type="checkbox"
-              checked={hasHeader}
-              onChange={(e) => setHasHeader(e.target.checked)}
-            />
-            First line is a header
-          </label>
-
-          <label className="field">
-            <input
-              type="checkbox"
-              checked={trimFields}
-              onChange={(e) => setTrimFields(e.target.checked)}
-            />
-            Trim whitespace
-          </label>
-
-          <label className="field">
-            <input
-              type="checkbox"
-              checked={recognizeNullTokens}
-              onChange={(e) => setRecognizeNullTokens(e.target.checked)}
-            />
-            Treat NULL/NA/N/A as null
-          </label>
-
-          <label className="field">
-            <input
-              type="checkbox"
-              checked={showSqlTypes}
-              onChange={(e) => setShowSqlTypes(e.target.checked)}
-            />
-            SQL types (Azure SQL)
-          </label>
-
-          <span className="spacer" />
-
-          {SAMPLES.map((s) => (
-            <button key={s.id} type="button" onClick={() => setText(s.text)}>
-              {s.label} sample
-            </button>
-          ))}
-          <button type="button" onClick={() => fileInput.current?.click()}>
-            Open file
-          </button>
-          <button type="button" onClick={() => setText('')} disabled={!text}>
-            Clear
-          </button>
-          <input
-            ref={fileInput}
-            type="file"
-            accept=".csv,.tsv,.txt,.psv,text/*"
-            hidden
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) readFile(file);
-              e.target.value = '';
-            }}
-          />
-        </div>
-      </section>
+      </Panel>
 
       {clipped ? (
         <div className="panel">
@@ -186,12 +191,9 @@ export function Analyzer() {
 
       {analysis ? (
         <>
-          <section className="panel">
-            <div className="panel-head">
-              <h2>Overview</h2>
-            </div>
+          <Panel id="overview" title="Overview">
             <Overview analysis={analysis} autoDetected={delimiterId === 'auto'} />
-          </section>
+          </Panel>
           <FirstRecord analysis={analysis} />
           <ColumnStats analysis={analysis} sqlColumns={sqlColumns ?? undefined} />
           {sqlColumns ? <SqlPanel analysis={analysis} columns={sqlColumns} /> : null}

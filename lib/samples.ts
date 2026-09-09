@@ -3,6 +3,8 @@
 export interface Sample {
   id: string;
   label: string;
+  /** Shown beside the label in the samples menu. */
+  hint: string;
   text: string;
 }
 
@@ -10,6 +12,7 @@ export const SAMPLES: Sample[] = [
   {
     id: 'comma',
     label: 'Comma',
+    hint: 'quoted fields, nulls',
     text: [
       'claim_id,ndc,fill_date,quantity,unit_cost,pharmacy,covered_entity,notes',
       '10001,00093-7146-56,2026-01-04,30,12.45,"Walgreens #4412, Arlington",BILH,',
@@ -22,6 +25,7 @@ export const SAMPLES: Sample[] = [
   {
     id: 'pipe',
     label: 'Pipe',
+    hint: 'dates, booleans',
     text: [
       'member_id|last_name|first_name|dob|plan|active',
       '88231|Nguyen|Thanh|1984-03-11|PBM-GOLD|true',
@@ -33,6 +37,7 @@ export const SAMPLES: Sample[] = [
   {
     id: 'triplePipe',
     label: 'Triple pipe',
+    hint: 'separators, negatives',
     text: [
       'record_id|||source_system|||amount|||posted_at|||status',
       '5001|||PharmaForce|||1,204.55|||2026-02-01 08:15:00|||POSTED',
@@ -44,6 +49,7 @@ export const SAMPLES: Sample[] = [
   {
     id: 'tab',
     label: 'Tab',
+    hint: 'blank cells',
     text: [
       ['server', 'database', 'size_mb', 'last_backup', 'geo_replicated'].join('\t'),
       ['sql-prod-01', 'claims', '184320', '2026-03-01', 'yes'].join('\t'),

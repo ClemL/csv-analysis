@@ -1,5 +1,6 @@
 import type { Analysis } from '@/lib/stats';
 import { displayValue, formatInt } from '@/lib/format';
+import { Panel } from './Panel';
 
 const PREVIEW_ROWS = 50;
 
@@ -7,13 +8,11 @@ export function DataPreview({ analysis }: { analysis: Analysis }) {
   const rows = analysis.rows.slice(0, PREVIEW_ROWS);
 
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <h2>Preview</h2>
-        <span style={{ color: 'var(--text-muted)' }}>
-          first {formatInt(rows.length)} of {formatInt(analysis.totalDataRows)} data rows
-        </span>
-      </div>
+    <Panel
+      id="preview"
+      title="Preview"
+      meta={`first ${formatInt(rows.length)} of ${formatInt(analysis.totalDataRows)} data rows`}
+    >
       <div className="scroll">
         <table className="preview-table">
           <thead>
@@ -42,6 +41,6 @@ export function DataPreview({ analysis }: { analysis: Analysis }) {
           </tbody>
         </table>
       </div>
-    </section>
+    </Panel>
   );
 }
