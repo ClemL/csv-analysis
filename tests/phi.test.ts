@@ -56,8 +56,8 @@ test('does not flag the identifier columns of an ordinary claims extract', () =>
     scan(
       [
         'claim_id,ndc,fill_date,quantity,unit_cost,pharmacy,covered_entity',
-        '10001,00093-7146-56,2026-01-04,30,12.45,Walgreens #4412,BILH',
-        '10002,00378-3855-93,2026-01-05,90,4.10,CVS #1120,BILH',
+        '10001,00093-7146-56,2026-01-04,30,12.45,Walgreens #4412,RIVERBEND',
+        '10002,00378-3855-93,2026-01-05,90,4.10,CVS #1120,RIVERBEND',
       ].join('\n'),
     ),
     [],
@@ -147,7 +147,7 @@ test('a generated claims file still flags only the member identifier', () => {
   const header =
     'claim_id,member_id,fill_date,ndc,brand_name,generic_name,quantity,' +
     'days_supply,unit_cost,total_cost,pharmacy,covered_entity';
-  const row = '600000,M88656,2026-06-23,0169-4132,Ozempic,semaglutide,60,60,143.80,8628.00,CVS #1120,BILH';
+  const row = '600000,M88656,2026-06-23,0169-4132,Ozempic,semaglutide,60,60,143.80,8628.00,CVS #1120,RIVERBEND';
   assert.deepEqual(scan(`${header}\n${row}`), ['member_id:member-id:name']);
 });
 

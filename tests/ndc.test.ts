@@ -5,6 +5,7 @@ import { parseDelimited, delimiterById } from '../lib/csv.ts';
 import { analyze } from '../lib/stats.ts';
 import {
   buildNdcUrl,
+  COVERED_ENTITIES,
   generateSample,
   isoDate,
   MAX_LIMIT,
@@ -161,4 +162,16 @@ test('generates for every delimiter and parses back identically', () => {
     assert.equal(rows.length, 7, option.label);
     assert.equal(rows[0].length, 12, option.label);
   }
+});
+
+test('covered entities are drawn from the invented list only', () => {
+  const sample = generateSample(products, { ...base, shape: 'claims', rows: 200 });
+  const { rows } = parseDelimited(sample.text, ',');
+  const entity = rows[0].indexOf('covered_entity');
+  const seen = new Set(rows.slice(1).map((row) => row[entity]));
+
+  for (const value of seen) assert.ok(COVERED_ENTITIES.includes(value), `unexpected: ${value}`);
+  assert.ok(seen.size > 1, 'the column should vary');
+  // Fabricated claims must not carry a real provider's name.
+  for (const value of COVERED_ENTITIES) assert.doesNotMatch(value, /BILH/i);
 });

@@ -214,7 +214,19 @@ const PHARMACIES = [
   'Rite Aid #8802',
   'Hospital Outpatient',
 ];
-const ENTITIES = ['BILH', 'BILH-MILTON', 'BILH-PLYMOUTH'];
+/**
+ * Invented covered entities, deliberately not real organizations: this data is
+ * fabricated, and fabricated claims should not carry a real provider's name.
+ * The parent-and-site shape (one code plus suffixed locations) is kept because
+ * it gives the column a realistic low-cardinality grouping to profile.
+ */
+export const COVERED_ENTITIES = [
+  'RIVERBEND',
+  'RIVERBEND-NORTH',
+  'RIVERBEND-SOUTH',
+  'NORTHGATE',
+  'LAKESHORE',
+];
 
 /**
  * Synthesizes claim rows against real NDCs. The drug data is genuine; the
@@ -240,7 +252,7 @@ function claimsRow(product: NdcProduct, index: number, random: () => number): st
     unitCost.toFixed(2),
     (Math.round(unitCost * quantity * 100) / 100).toFixed(2),
     PHARMACIES[Math.floor(random() * PHARMACIES.length)],
-    ENTITIES[Math.floor(random() * ENTITIES.length)],
+    COVERED_ENTITIES[Math.floor(random() * COVERED_ENTITIES.length)],
   ];
 }
 
