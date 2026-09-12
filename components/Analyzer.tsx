@@ -12,6 +12,7 @@ import { FirstRecord } from './FirstRecord';
 import { ColumnStats } from './ColumnStats';
 import { DataPreview } from './DataPreview';
 import { SqlPanel } from './SqlPanel';
+import { EfModelPanel } from './EfModelPanel';
 import { CompareView } from './CompareView';
 import { GeneratorView } from './GeneratorView';
 
@@ -184,12 +185,15 @@ export function Analyzer() {
                 phi={a.phi}
               />
               {a.sqlColumns ? (
-                <SqlPanel
-                  analysis={a.analysis}
-                  columns={a.sqlColumns}
-                  staging={settings.staging}
-                  onStagingChange={(value) => set('staging', value)}
-                />
+                <>
+                  <SqlPanel
+                    analysis={a.analysis}
+                    columns={a.sqlColumns}
+                    staging={settings.staging}
+                    onStagingChange={(value) => set('staging', value)}
+                  />
+                  <EfModelPanel columns={a.sqlColumns} />
+                </>
               ) : null}
               <DataPreview analysis={a.analysis} />
             </>

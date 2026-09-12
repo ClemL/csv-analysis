@@ -148,6 +148,64 @@ Every field of the response is treated as optional. A record with no
 `brand_name`, `packaging` or `active_ingredients` produces blank cells rather
 than a crash.
 
+## EF model generation
+
+Alongside the SQL script, an **EF model (C#)** section emits a landing-row
+entity in the same shape as the hand-written ones: a `partial class` deriving
+from `ImportRow`, a `[ConnectionString]` and `[Table]` pair pointing at a
+registry entry, one `[Column]` per source field carrying its ordinal,
+`[MaxLength]` on string properties only, and a `[NotMapped]` TPA name. Copy it
+or download it as a `.cs`.
+
+Six fields drive it, all editable: source/TPA name, entity, namespace, registry,
+base types and the first ordinal. `{TPA}` in the namespace and registry
+templates is substituted with the source name, so renaming the source updates
+the namespace, the registry, the class name, the `TPAName` value and the
+download filename together. The defaults leave `__TPA__` in place — a legal C#
+identifier, so the file compiles before anything is renamed.
+
+Ordinals start at **2** by default, leaving 1 to `ImportRow`.
+
+### Property naming
+
+Source column names become PascalCase properties with acronyms title-cased, which
+is what the hand-written models do: `NDC` → `Ndc`, `PrescriberNPI` →
+`PrescriberNpi`, `PrescriberDEA` → `PrescriberDea`. `ID` is the exception and
+keeps its casing, as in `StoreID`. A name cannot begin with a digit, so a leading
+numeric run moves to the end: `340BID` → `ID340B`, `2024Total` → `Total2024`. The
+`[Column]` attribute always carries the original header verbatim, so the mapping
+survives the rename. Duplicates are suffixed, and a property is renamed if it
+would collide with its own class name, which C# forbids.
+
+### Type mapping
+
+| Inferred SQL type | C# |
+| --- | --- |
+| `BIT` | `bool?` |
+| `TINYINT`, `SMALLINT`, `INT` | `int?` |
+| `BIGINT` | `long?` |
+| `DECIMAL(p,s)` | `decimal?` |
+| `FLOAT` | `double?` |
+| `DATE`, `DATETIME2(n)` | `DateTime?` |
+| `DATETIMEOFFSET(n)` | `DateTimeOffset?` |
+| `UNIQUEIDENTIFIER` | `Guid?` |
+| `VARCHAR(n)`, `NVARCHAR(n)` | `string` with `[MaxLength(n)]` |
+| `VARCHAR(MAX)`, `NVARCHAR(MAX)` | `string`, no `[MaxLength]` |
+
+Value types are nullable throughout: a landing row should take the file as it
+arrives rather than turn a missing cell into a zero.
+
+Types come from the same inference as the `CREATE TABLE`, so the two always
+agree — including the same limitation. A `Quantity` column whose sample happens
+to hold only whole numbers infers `int?`, not `decimal?`. Check numeric columns
+against the source specification before committing the model.
+
+**Identifier columns are exempt.** A column the scan recognizes as an NPI, SSN,
+member number, medical record number, phone or postal code keeps a character
+type however numeric it looks, in both the DDL and the model. A valid NPI is ten
+digits and would otherwise land in an `INT`; nothing arithmetic is ever done to
+it, and a fixed-width code loses its shape in an integer column.
+
 ## Compare mode
 
 Two pastes, parsed under the same settings, for reconciling the same period from
@@ -270,6 +328,8 @@ components/
   InputPanel.tsx    paste area, file opening and byte decoding
   CompareView.tsx   schema and row reconciliation between two datasets
   GeneratorView.tsx openFDA search, sample shaping and output
+  EfModelPanel.tsx  EF entity generation and its placeholders
+  ScriptBox.tsx     read-only generated file with copy and download
   useDataset.ts     parse, profile, SQL types and PHI scan for one dataset
   Overview.tsx      file-level tiles and data-quality notices
   FirstRecord.tsx   row 1 as key/value pairs
@@ -284,6 +344,7 @@ lib/
   phi.ts            PHI and personal-identifier heuristics
   diff.ts           comparison of two datasets
   ndc.ts            openFDA client and sample-file generators
+  efmodel.ts        CLR type mapping, property naming and entity rendering
   format.ts         display formatting
 tests/
   csv.test.ts       parser and profiler tests
@@ -292,6 +353,7 @@ tests/
   phi.test.ts       identifier-detection tests, including false positives
   diff.test.ts      comparison tests
   ndc.test.ts       URL building and generator tests, against a fixture
+  efmodel.test.ts   type mapping, naming rules and rendered-shape tests
   fixtures/         a captured openFDA response, so tests need no network
 ```
 

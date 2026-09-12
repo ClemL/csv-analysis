@@ -22,6 +22,19 @@ export type PhiCategory =
   | 'address'
   | 'postal-code';
 
+/**
+ * Categories whose values are codes rather than quantities. Nothing arithmetic
+ * is ever done to these, so they belong in character columns.
+ */
+export const IDENTIFIER_CATEGORIES: ReadonlySet<PhiCategory> = new Set<PhiCategory>([
+  'ssn',
+  'medical-record-number',
+  'member-id',
+  'npi',
+  'phone',
+  'postal-code',
+]);
+
 export interface PhiFinding {
   columnIndex: number;
   columnName: string;

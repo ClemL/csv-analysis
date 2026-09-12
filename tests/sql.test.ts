@@ -174,3 +174,29 @@ test('staging widening saturates rather than overflowing', () => {
   assert.ok(big);
   assert.equal(inferSqlColumns(big, { staging: true })[0].type, 'BIGINT', 'already the widest');
 });
+
+test('identifier columns stay character-typed however numeric they look', () => {
+  // A valid NPI is ten digits with a Luhn check; an INT column would be wrong.
+  const analysis = analyze('prescriber_npi,qty\n1234567893,30\n1245319599,60', options);
+  assert.ok(analysis);
+
+  const naive = inferSqlColumns(analysis);
+  assert.equal(naive[0].type, 'INT', 'without the hint it reads as a number');
+
+  const informed = inferSqlColumns(analysis, { identifierColumns: new Set([0]) });
+  assert.equal(informed[0].type, 'VARCHAR(10)');
+  assert.match(informed[0].rationale, /identifier column, kept as text/);
+  assert.equal(informed[1].type, 'TINYINT', 'other columns are unaffected');
+});
+
+test('an identifier column of GUIDs is still UNIQUEIDENTIFIER', () => {
+  const analysis = analyze(
+    'member_id\n3f2504e0-4f89-11d3-9a0c-0305e82c3301\n0f8fad5b-d9cb-469f-a165-70867728950e',
+    options,
+  );
+  assert.ok(analysis);
+  assert.equal(
+    inferSqlColumns(analysis, { identifierColumns: new Set([0]) })[0].type,
+    'UNIQUEIDENTIFIER',
+  );
+});

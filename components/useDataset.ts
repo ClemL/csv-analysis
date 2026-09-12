@@ -4,7 +4,7 @@ import { useDeferredValue, useMemo } from 'react';
 import { delimiterById, detectDelimiter, type DelimiterId, type DelimiterOption } from '@/lib/csv';
 import { analyze, type Analysis } from '@/lib/stats';
 import { inferSqlColumns, type SqlColumn } from '@/lib/sql';
-import { scanForPhi, type PhiFinding } from '@/lib/phi';
+import { IDENTIFIER_CATEGORIES, scanForPhi, type PhiFinding } from '@/lib/phi';
 import type { EncodingId } from '@/lib/encoding';
 
 /** Parsing happens on the main thread, so very large pastes are clipped. */
@@ -63,15 +63,25 @@ export function useDataset(text: string, settings: Settings): Dataset {
     [source, delimiter, settings.hasHeader, settings.trimFields, settings.recognizeNullTokens],
   );
 
+  const phi = useMemo(() => (analysis ? scanForPhi(analysis) : []), [analysis]);
+
+  // Columns the scan recognized as identifiers stay character-typed, however
+  // numeric they look.
+  const identifierColumns = useMemo(
+    () =>
+      new Set(
+        phi.filter((f) => IDENTIFIER_CATEGORIES.has(f.category)).map((f) => f.columnIndex),
+      ),
+    [phi],
+  );
+
   const sqlColumns = useMemo(
     () =>
       analysis && settings.showSqlTypes
-        ? inferSqlColumns(analysis, { staging: settings.staging })
+        ? inferSqlColumns(analysis, { staging: settings.staging, identifierColumns })
         : null,
-    [analysis, settings.showSqlTypes, settings.staging],
+    [analysis, settings.showSqlTypes, settings.staging, identifierColumns],
   );
-
-  const phi = useMemo(() => (analysis ? scanForPhi(analysis) : []), [analysis]);
 
   return { delimiter, analysis, sqlColumns, phi, clipped };
 }

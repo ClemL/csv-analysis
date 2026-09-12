@@ -1,67 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Analysis } from '@/lib/stats';
 import { buildScript, MAX_INSERT_ROWS, type SqlColumn, type SqlScript } from '@/lib/sql';
 import { formatInt } from '@/lib/format';
 import { Panel } from './Panel';
-
-function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      type="button"
-      disabled={!text}
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text);
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1800);
-        } catch {
-          setCopied(false);
-        }
-      }}
-    >
-      {copied ? 'Copied' : label}
-    </button>
-  );
-}
-
-function ScriptBox({
-  title,
-  script,
-  filename,
-  rows,
-}: {
-  title: string;
-  script: string;
-  filename: string;
-  rows: number;
-}) {
-  const download = useCallback(() => {
-    const url = URL.createObjectURL(new Blob([script], { type: 'text/plain;charset=utf-8' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, [script, filename]);
-
-  return (
-    <div className="script">
-      <div className="script-head">
-        <h3>{title}</h3>
-        <span className="script-meta">{formatInt(script.length)} characters</span>
-        <span className="spacer" />
-        <CopyButton text={script} />
-        <button type="button" onClick={download}>
-          Download .sql
-        </button>
-      </div>
-      <textarea readOnly value={script} rows={rows} spellCheck={false} aria-label={title} />
-    </div>
-  );
-}
+import { ScriptBox } from './ScriptBox';
 
 export function SqlPanel({
   analysis,
@@ -132,12 +76,14 @@ export function SqlPanel({
             script={script.createTable}
             filename="create-table.sql"
             rows={Math.min(columns.length + 8, 26)}
+            downloadLabel="Download .sql"
           />
           <ScriptBox
             title={`INSERT — ${formatInt(script.rowsIncluded)} row(s)`}
             script={script.insertStatements}
             filename="insert-rows.sql"
             rows={Math.min(script.insertStatements.split('\n').length + 1, 26)}
+            downloadLabel="Download .sql"
           />
         </div>
       ) : (

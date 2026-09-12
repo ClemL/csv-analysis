@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { delimiterById } from '../lib/csv.ts';
 import { analyze } from '../lib/stats.ts';
-import { isValidNpi, scanForPhi } from '../lib/phi.ts';
+import { IDENTIFIER_CATEGORIES, isValidNpi, scanForPhi } from '../lib/phi.ts';
 
 const options = {
   delimiter: delimiterById('comma'),
@@ -161,4 +161,19 @@ test('identifier rules are anchored on both sides', () => {
   assert.deepEqual(scan('chart_no,x\nA1,1'), ['chart_no:medical-record-number:name']);
   assert.deepEqual(scan('patient_id,x\nA1,1'), ['patient_id:member-id:name']);
   assert.deepEqual(scan('member_nbr,x\nA1,1'), ['member_nbr:member-id:name']);
+});
+
+test('identifier categories are the code-like ones only', () => {
+  // Dates and free text are already the right shape; codes are what must not
+  // become numbers.
+  assert.deepEqual([...IDENTIFIER_CATEGORIES].sort(), [
+    'medical-record-number',
+    'member-id',
+    'npi',
+    'phone',
+    'postal-code',
+    'ssn',
+  ]);
+  assert.equal(IDENTIFIER_CATEGORIES.has('date-of-birth'), false);
+  assert.equal(IDENTIFIER_CATEGORIES.has('name'), false);
 });

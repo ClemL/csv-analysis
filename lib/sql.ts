@@ -205,6 +205,25 @@ function widenInteger(type: string): string {
   return index >= 0 && index < INT_WIDTHS.length - 1 ? INT_WIDTHS[index + 1] : type;
 }
 
+/**
+ * An identifier column keeps its character type even when every value parses
+ * as a number, so a 10-digit NPI never lands in an INT.
+ */
+function identifierType(
+  profile: ColumnProfile,
+  hints: Hints,
+  staging: boolean,
+): { type: string; literal: LiteralKind; rationale: string } {
+  if (profile.filled === 0) {
+    return { type: 'NVARCHAR(255)', literal: 'unicode', rationale: 'no values in the sample; defaulted' };
+  }
+  if (hints.allGuid) {
+    return { type: 'UNIQUEIDENTIFIER', literal: 'string', rationale: 'all values are GUIDs' };
+  }
+  const char = characterType(hints, staging);
+  return { ...char, rationale: `identifier column, kept as text; ${char.rationale}` };
+}
+
 function inferType(
   profile: ColumnProfile,
   hints: Hints,
@@ -316,6 +335,13 @@ function columnValues(analysis: Analysis, index: number): string[] {
 
 export interface InferOptions {
   /**
+   * Column indices known to hold identifiers rather than quantities — an NPI,
+   * an SSN, a member number. These are kept as character data however numeric
+   * they look: nothing arithmetic is ever done to them, and a fixed-width code
+   * loses its shape in an integer column.
+   */
+  identifierColumns?: ReadonlySet<number>;
+  /**
    * Widens every inference for a landing table: one more length bucket, four
    * more digits of decimal precision, the next integer width, and every column
    * nullable. A staging table should accept the file, not reject rows the
@@ -326,9 +352,12 @@ export interface InferOptions {
 
 export function inferSqlColumns(analysis: Analysis, options: InferOptions = {}): SqlColumn[] {
   const staging = options.staging ?? false;
+  const identifiers = options.identifierColumns;
   return analysis.columns.map((profile) => {
     const hints = collectHints(columnValues(analysis, profile.index));
-    const { type, literal, rationale } = inferType(profile, hints, staging);
+    const { type, literal, rationale } = identifiers?.has(profile.index)
+      ? identifierType(profile, hints, staging)
+      : inferType(profile, hints, staging);
     return {
       name: profile.name,
       identifier: quoteIdentifier(profile.name),

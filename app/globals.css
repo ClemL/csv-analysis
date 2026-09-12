@@ -938,3 +938,37 @@ td.cell-b {
   border-radius: 4px;
   padding: 0 4px;
 }
+
+/* EF model panel */
+
+.ef-toolbar {
+  border-top: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.ef-toolbar input[type='text'],
+.ef-toolbar input[type='number'] {
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 4px 8px;
+  min-width: 110px;
+}
+
+.ef-toolbar .field.grow input[type='text'] {
+  width: 100%;
+}
+
+.ef-toolbar input[type='number'] {
+  width: 70px;
+  min-width: 0;
+}
+
+.ef-toolbar input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
