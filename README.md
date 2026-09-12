@@ -12,7 +12,8 @@ React and Next.js.
 
 **Input**
 
-- Three modes: **Analyze** one file, **Compare two files** side by side, or
+- Four modes: **Analyze** one file, **Compare two files** side by side,
+  **Contract check** a file against the schema it has to load into, or
   **Generate sample data** from the openFDA drug directory.
 - Large paste area, or drag and drop / open a local file.
 - Opened files are decoded from their bytes, not assumed to be UTF-8. A
@@ -147,6 +148,44 @@ that case is reported as "No products matched that search" instead of an error.
 Every field of the response is treated as optional. A record with no
 `brand_name`, `packaging` or `active_ingredients` produces blank cells rather
 than a crash.
+
+## Contract check
+
+Paste an EF landing model or a `CREATE TABLE`, paste the file, and get a verdict
+before you attempt the load. The two contract formats are detected
+automatically and reduced to the same column list, so the checks are identical
+either way.
+
+What it reports:
+
+| Finding | Severity | Meaning |
+| --- | --- | --- |
+| Too long | error | Values exceed the declared `MaxLength` or `VARCHAR(n)`. Reports how many, how long the longest is, and shows the offenders. |
+| Will not convert | error | Values that cannot be parsed into the declared type — `PENDING` in an `int?`. |
+| Null in NOT NULL | error | Nulls or blanks in a column declared `[Required]` or `NOT NULL`. |
+| Missing column | error | The contract expects a column the file does not have. |
+| Extra column | warning | The file has a column the contract does not. |
+| Out of order | warning | The column is present but at a different position; `[Column(Order = n)]` is positional. |
+| Matched loosely | warning | Matched only after ignoring case and separators, e.g. `patient_last_name` to `PatientLastName`. |
+
+The verdict tile reads **Loads**, **Check** or **Will fail** — errors are the
+ones that break a load, warnings are worth reading.
+
+### What the parsers read
+
+From an EF model: the class, `[Table]` and `Schema`, and for each property the
+`[Column]` name and `Order`, `[MaxLength]` or `[StringLength]`, `[Required]`,
+and the CLR type. `[NotMapped]` properties are skipped, and the source column
+name is kept distinct from the C# property name — the file has to match
+`[Column("StoreIdentifier")]`, not `StoreID`.
+
+From a `CREATE TABLE`: schema, table, and for each column the type, length and
+nullability. Constraints, keys and indexes are skipped, and a `DECIMAL(8,2)`
+precision is not mistaken for a string length.
+
+Both parsers are deliberately forgiving, since they read hand-written source.
+Anything unrecognized — a navigation property, an exotic column type — is
+reported as a parser warning rather than failing the whole contract.
 
 ## EF model generation
 
@@ -329,6 +368,7 @@ components/
   CompareView.tsx   schema and row reconciliation between two datasets
   GeneratorView.tsx openFDA search, sample shaping and output
   EfModelPanel.tsx  EF entity generation and its placeholders
+  ContractView.tsx  contract input, findings and the column-by-column table
   ScriptBox.tsx     read-only generated file with copy and download
   useDataset.ts     parse, profile, SQL types and PHI scan for one dataset
   Overview.tsx      file-level tiles and data-quality notices
@@ -345,6 +385,7 @@ lib/
   diff.ts           comparison of two datasets
   ndc.ts            openFDA client and sample-file generators
   efmodel.ts        CLR type mapping, property naming and entity rendering
+  contract.ts       EF and DDL parsing, and checking a file against either
   format.ts         display formatting
 tests/
   csv.test.ts       parser and profiler tests
@@ -354,6 +395,7 @@ tests/
   diff.test.ts      comparison tests
   ndc.test.ts       URL building and generator tests, against a fixture
   efmodel.test.ts   type mapping, naming rules and rendered-shape tests
+  contract.test.ts  parser and check tests, against a real landing model
   fixtures/         a captured openFDA response, so tests need no network
 ```
 

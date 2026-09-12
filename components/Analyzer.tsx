@@ -15,12 +15,14 @@ import { SqlPanel } from './SqlPanel';
 import { EfModelPanel } from './EfModelPanel';
 import { CompareView } from './CompareView';
 import { GeneratorView } from './GeneratorView';
+import { ContractView } from './ContractView';
 
-type Mode = 'analyze' | 'compare' | 'generate';
+type Mode = 'analyze' | 'compare' | 'contract' | 'generate';
 
 const MODE_LABELS: Record<Mode, string> = {
   analyze: 'Analyze',
   compare: 'Compare two files',
+  contract: 'Contract check',
   generate: 'Generate sample data',
 };
 
@@ -153,10 +155,35 @@ export function Analyzer() {
             Real drug records from the openFDA NDC directory, shaped into a delimited file.
           </span>
         ) : null}
+        {mode === 'contract' ? (
+          <span className="modebar-hint">
+            Check the file against an EF landing model or a CREATE TABLE before you try to load it.
+          </span>
+        ) : null}
       </div>
 
       {mode === 'generate' ? (
         <GeneratorView onUse={useGenerated} />
+      ) : mode === 'contract' ? (
+        <>
+          <ContractView
+            analysis={a.analysis}
+            dataInput={
+              <>
+                <InputPanel
+                  id="input"
+                  title="Data file"
+                  text={textA}
+                  onText={setTextA}
+                  encoding={settings.encoding}
+                  compact
+                  footer={toolbar}
+                />
+                {a.clipped ? <Clipped /> : null}
+              </>
+            }
+          />
+        </>
       ) : mode === 'analyze' ? (
         <>
           <InputPanel
