@@ -189,8 +189,12 @@ reported as a parser warning rather than failing the whole contract.
 
 ## EF model generation
 
-Alongside the SQL script, an **EF model (C#)** section emits a landing-row
-entity in the same shape as the hand-written ones: a `partial class` deriving
+Alongside the SQL script, an **EF model (C#)** section builds a landing-row
+entity in the same shape as the hand-written ones. The section is collapsed by
+default and generates nothing until **Generate** is pressed, so it stays out of
+the way when you only came to look at the data. The result is a snapshot:
+changing an option or the file clears it, and the button reads **Generate**
+again, so what is on screen always matches what produced it. It emits: a `partial class` deriving
 from `ImportRow`, a `[ConnectionString]` and `[Table]` pair pointing at a
 registry entry, one `[Column]` per source field carrying its ordinal,
 `[MaxLength]` on string properties only, and a `[NotMapped]` TPA name. Copy it

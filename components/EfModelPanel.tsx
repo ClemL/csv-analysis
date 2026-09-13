@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { SqlColumn } from '@/lib/sql';
 import {
   buildEfModel,
@@ -14,18 +14,25 @@ import { ScriptBox } from './ScriptBox';
 
 export function EfModelPanel({ columns }: { columns: SqlColumn[] }) {
   const [options, setOptions] = useState<EfOptions>(DEFAULT_EF_OPTIONS);
+  const [model, setModel] = useState<string | null>(null);
 
   const set = <K extends keyof EfOptions>(key: K, value: EfOptions[K]) =>
     setOptions((prev) => ({ ...prev, [key]: value }));
 
-  // Cheap enough to keep live: no fetch, no scan of the row data.
-  const model = useMemo(() => buildEfModel(columns, options), [columns, options]);
+  // The model is a snapshot: drop it whenever the data or the options move, so
+  // what is on screen always matches what produced it.
+  useEffect(() => setModel(null), [columns, options]);
 
   return (
     <Panel
       id="ef-model"
       title="EF model (C#)"
-      meta={`${formatInt(columns.length)} mapped properties`}
+      defaultOpen={false}
+      meta={
+        model
+          ? `${formatInt(columns.length)} mapped properties`
+          : `${formatInt(columns.length)} columns ready to map`
+      }
     >
       <div className="toolbar ef-toolbar">
         <label className="field">
@@ -91,8 +98,13 @@ export function EfModelPanel({ columns }: { columns: SqlColumn[] }) {
           />
         </label>
 
+        <span className="spacer" />
+
         <button type="button" onClick={() => setOptions(DEFAULT_EF_OPTIONS)}>
           Reset
+        </button>
+        <button type="button" onClick={() => setModel(buildEfModel(columns, options))}>
+          {model ? 'Regenerate' : 'Generate'}
         </button>
       </div>
 
@@ -110,14 +122,20 @@ export function EfModelPanel({ columns }: { columns: SqlColumn[] }) {
           <code>decimal?</code>. Check the numeric columns against the source specification.
         </p>
 
-        <ScriptBox
-          title={efFileName(options)}
-          script={model}
-          filename={efFileName(options)}
-          rows={Math.min(model.split('\n').length + 1, 30)}
-          mime="text/plain;charset=utf-8"
-          downloadLabel="Download .cs"
-        />
+        {model ? (
+          <ScriptBox
+            title={efFileName(options)}
+            script={model}
+            filename={efFileName(options)}
+            rows={Math.min(model.split('\n').length + 1, 30)}
+            mime="text/plain;charset=utf-8"
+            downloadLabel="Download .cs"
+          />
+        ) : (
+          <p className="shape-note">
+            Press <strong>Generate</strong> to render <code>{efFileName(options)}</code>.
+          </p>
+        )}
       </div>
     </Panel>
   );
