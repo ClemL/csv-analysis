@@ -8,6 +8,9 @@ Parsing runs entirely in the browser. No data is uploaded, and the app has no
 server-side routes, no database and no third-party runtime dependencies beyond
 React and Next.js.
 
+It also packages as an installable desktop app for Windows, macOS and Linux —
+see [Desktop app](#desktop-app).
+
 ## Features
 
 **Input**
@@ -356,6 +359,79 @@ vercel          # preview deployment
 vercel --prod   # production deployment
 ```
 
+## Desktop app
+
+The same code ships as an installable desktop app. Because nothing renders on
+the server and no data leaves the machine, the desktop build is the web build
+with a window around it: `DESKTOP_BUILD=1 next build` writes a fully static
+bundle to `out/`, and an Electron shell serves it locally.
+
+```bash
+npm run desktop:start      # build the bundle and open the app
+npm run desktop:pack       # unpacked app in release/, for a quick look
+npm run desktop:dist       # installers for the current platform
+npm run desktop:dist:win   # Windows installer and portable .exe
+```
+
+Artifacts land in `release/`:
+
+| Platform | Artifact | Notes |
+| --- | --- | --- |
+| Windows | `CSV Inspector-1.0.0-x64.exe` | NSIS installer, per-user, no admin rights |
+| Windows | `CSV Inspector-1.0.0-portable.exe` | Single file, runs without installing |
+| macOS | `CSV Inspector-1.0.0-{arm64,x64}.dmg` | Unsigned; see below |
+| Linux | `CSV Inspector-1.0.0.AppImage` | `chmod +x`, then run |
+
+Build on the platform you are targeting. Cross-building the Windows installer
+from Linux or macOS needs Wine, and the macOS `.dmg` can only be produced on
+macOS.
+
+### How the shell loads the app
+
+`electron/main.mjs` registers a custom `app://` scheme and serves `out/` from
+it, rather than pointing the window at a `file://` path. Two things depend on
+that:
+
+- The Next.js export references its assets absolutely (`/_next/static/...`).
+  Under `file://` those resolve against the filesystem root and 404.
+- `file://` pages get an opaque origin, so `localStorage` — which the
+  collapsible panels use to remember their state — does not persist there. A
+  registered standard scheme gives the app a stable origin.
+
+Files are read with `fs` rather than `net.fetch`, because `fs` is asar-aware
+and the export lives inside the packaged archive.
+
+The renderer runs with `contextIsolation`, `sandbox` and no Node integration:
+the app needs none of it, since parsing, profiling and script generation are
+plain browser code. Served HTML carries a content security policy whose
+`connect-src` allows only `https://api.fda.gov`, so the one network request
+described above stays the only one possible. Links to the open web open in the
+default browser instead of a second app window.
+
+### Code signing
+
+The artifacts are unsigned. Windows SmartScreen will warn on first run, and
+macOS Gatekeeper will refuse to open the `.dmg` until it is signed and
+notarized. For a small internal rollout that is usually acceptable — the
+portable `.exe` avoids the installer path altogether. To sign, set the
+standard electron-builder environment variables (`CSC_LINK` and
+`CSC_KEY_PASSWORD`, plus `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and
+`APPLE_TEAM_ID` for notarization) before `npm run desktop:dist`; no config
+change is needed.
+
+### Lighter alternatives
+
+Electron is not the only way to get a downloadable app, and it is the
+heaviest: about 120 MB per artifact, almost all of it Chromium.
+
+- **Install from the browser.** Edge and Chrome will install any site as a
+  standalone windowed app from the address bar, with no packaging, no signing
+  and no SmartScreen prompt. It needs the Vercel deployment above and a web
+  app manifest, and it is by far the cheapest option.
+- **Tauri** uses the operating system's WebView2 instead of bundling Chromium,
+  which brings artifacts down to roughly 10 MB. The cost is a Rust toolchain
+  in the build and a rendering engine whose version you do not control.
+
 ## Project layout
 
 ```
@@ -391,6 +467,10 @@ lib/
   efmodel.ts        CLR type mapping, property naming and entity rendering
   contract.ts       EF and DDL parsing, and checking a file against either
   format.ts         display formatting
+electron/
+  main.mjs          desktop shell: app:// scheme, window and menu
+build/
+  icon.png          app and installer icon, rasterized from app/icon.svg
 tests/
   csv.test.ts       parser and profiler tests
   sql.test.ts       SQL inference and script generation tests
@@ -401,6 +481,7 @@ tests/
   efmodel.test.ts   type mapping, naming rules and rendered-shape tests
   contract.test.ts  parser and check tests, against a real landing model
   fixtures/         a captured openFDA response, so tests need no network
+electron-builder.yml  desktop packaging targets
 ```
 
 ## Limits

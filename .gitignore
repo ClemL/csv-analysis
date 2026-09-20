@@ -1,10 +1,14 @@
 node_modules/
 .next/
 out/
-build/
+build/*
+!build/icon.png
 .DS_Store
 *.pem
 .env*.local
 .vercel
 *.tsbuildinfo
 next-env.d.ts
+
+# Electron installers
+release/

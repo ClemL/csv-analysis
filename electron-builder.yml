@@ -1,0 +1,57 @@
+# Packaging config for the desktop build. Run `npm run desktop:dist` after
+# `npm run desktop:build`; installers land in `release/`.
+# appId identifies the app to the OS; change it if you publish under an org.
+appId: io.github.cleml.csv-inspector
+productName: CSV Inspector
+
+directories:
+  output: release
+  buildResources: build
+
+# Only the exported site and the shell are shipped. The exclusion matters:
+# the app has no runtime npm dependencies — the export is self-contained and the
+# shell imports nothing but `electron` itself — but electron-builder bundles
+# `dependencies` by default, which would drag Next.js and its native image
+# libraries in and add roughly 200 MB to every artifact.
+files:
+  - electron/**/*
+  - out/**/*
+  - build/icon.png
+  - package.json
+  - '!node_modules/**/*'
+
+# Nothing here is uploaded anywhere; `npm run desktop:dist` builds artifacts only.
+publish: null
+
+win:
+  # `nsis` is the normal installer. `portable` is a single self-contained .exe
+  # that runs without installing — the one to hand to a locked-down workstation.
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  category: public.app-category.developer-tools
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+  category: Development
+  executableName: csv-inspector
