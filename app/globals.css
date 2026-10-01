@@ -661,6 +661,8 @@ button:disabled:hover {
 
 .segmented {
   display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   padding: 2px;
   gap: 2px;
   background: var(--panel-alt);
@@ -1010,4 +1012,19 @@ td.cell-b {
   padding: 0 4px;
   border-radius: 4px;
   background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+/* bcp log */
+
+.bcp-raw {
+  display: block;
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+td.wrap {
+  white-space: normal;
+  min-width: 260px;
 }

@@ -16,13 +16,15 @@ import { EfModelPanel } from './EfModelPanel';
 import { CompareView } from './CompareView';
 import { GeneratorView } from './GeneratorView';
 import { ContractView } from './ContractView';
+import { BcpView } from './BcpView';
 
-type Mode = 'analyze' | 'compare' | 'contract' | 'generate';
+type Mode = 'analyze' | 'compare' | 'contract' | 'bcp' | 'generate';
 
 const MODE_LABELS: Record<Mode, string> = {
   analyze: 'Analyze',
   compare: 'Compare two files',
   contract: 'Contract check',
+  bcp: 'BCP log',
   generate: 'Generate sample data',
 };
 
@@ -155,6 +157,12 @@ export function Analyzer() {
             Real drug records from the openFDA NDC directory, shaped into a delimited file.
           </span>
         ) : null}
+        {mode === 'bcp' ? (
+          <span className="modebar-hint">
+            Read bcp's console output: what it copied, which files it wrote, what went wrong, and
+            how to load the file back.
+          </span>
+        ) : null}
         {mode === 'contract' ? (
           <span className="modebar-hint">
             Check the file against an EF landing model or a CREATE TABLE before you try to load it.
@@ -162,7 +170,9 @@ export function Analyzer() {
         ) : null}
       </div>
 
-      {mode === 'generate' ? (
+      {mode === 'bcp' ? (
+        <BcpView />
+      ) : mode === 'generate' ? (
         <GeneratorView onUse={useGenerated} />
       ) : mode === 'contract' ? (
         <>

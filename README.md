@@ -15,9 +15,9 @@ see [Desktop app](#desktop-app).
 
 **Input**
 
-- Four modes: **Analyze** one file, **Compare two files** side by side,
-  **Contract check** a file against the schema it has to load into, or
-  **Generate sample data** from the openFDA drug directory.
+- Five modes: **Analyze** one file, **Compare two files** side by side,
+  **Contract check** a file against the schema it has to load into, read a
+  **BCP log**, or **Generate sample data** from the openFDA drug directory.
 - Large paste area, or drag and drop / open a local file.
 - Opened files are decoded from their bytes, not assumed to be UTF-8. A
   byte-order mark wins; otherwise strict UTF-8 is tried and Windows-1252 is the
@@ -106,6 +106,50 @@ separators (`1,234.50`), a currency prefix (`$99`) or accounting negatives
 **Null handling** counts empty strings as missing always, and `NULL`, `NA`,
 `N/A`, `NIL`, `NONE`, `NAN`, `\N`, `#N/A` and `UNDEFINED` as missing when the
 "treat NULL/NA/N/A as null" toggle is on. The column table separates the two.
+
+## BCP log
+
+Paste the console output of a `bcp` run, or open the log file, and get what it
+did, what it touched and what went wrong. Pipeline prefixes are stripped first:
+an ISO timestamp (`2026-09-26T07:02:10.5433253Z`, as Azure DevOps writes it)
+and a Microsoft.Extensions.Logging category (`07:02:10 info:
+DataDownloader.SQL.Dump[0]`), so a DataDownloader log pastes in as is. A log
+that runs bcp for many tables is split into one run per command, with a runs
+table and totals above the per-run detail.
+
+For each run:
+
+- **Outcome** — rows copied, bcp's own clock time, rows per second and packet
+  size. A run is *Succeeded*, *Rows rejected* (finished, but with errors),
+  *Failed* (errors and no summary, or a `BCP copy … failed` line) or *No
+  summary* (the log stops before `N rows copied.`). The last progress total is
+  checked against the summary; bcp reports progress every 1,000 rows, so 9,000
+  followed by 9,216 is consistent.
+- **Errors** — `SQLState = …, NativeError = …` / `Error = …` pairs, grouped
+  and counted, with the ODBC driver prefixes removed and a plain explanation
+  for the common states (`22001` truncation, `23000` constraint, `28000` login
+  failed, and others).
+- **Files** — the data file, the `-e` error file, any format, output or
+  response file, and an access-token file passed through `-G -P`, each marked
+  read or written with what it contains. Native (`-n`/`-N`) data is described
+  as binary; character (`-c`/`-w`) data with its terminators.
+- **Command** — every switch with its value and meaning. `-e`/`-E`, `-n`/`-N`
+  and the other case pairs are kept apart. A literal `-P` password is masked
+  on screen and raised as a finding, since it is already in the log.
+- **Findings** — options that do nothing in this direction (`-b`, `-E`, `-k`
+  and `-h` on an export), no format option (bcp would prompt per column and
+  hang an unattended job), a token file left on disk, unquoted character
+  exports, and on imports the defaults that hide partial loads (`-m 10`, no
+  `-e`, no `-E`).
+- **Re-import** — for an export, a `bcp … in` command that reuses the export's
+  format and terminator switches and adds `-E -k -h "TABLOCK" -m1 -e`, a
+  `format nul` command for native exports so the file survives a schema
+  change, and the `COUNT_BIG` and `CHECKSUM_AGG` queries to verify the load.
+  Target server, database, table and options are editable.
+
+The log is parsed locally like everything else. Behavior notes follow
+Microsoft Learn's [bcp utility](https://learn.microsoft.com/en-us/sql/tools/bcp-utility)
+reference.
 
 ## Generate mode
 
