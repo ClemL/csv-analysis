@@ -61,6 +61,22 @@ export function InputPanel({
     onText('');
   };
 
+  const [pasteError, setPasteError] = useState(false);
+
+  const paste = async () => {
+    try {
+      const value = await navigator.clipboard.readText();
+      setPasteError(false);
+      setBytes(null);
+      setDecoded(undefined);
+      onText(value);
+    } catch {
+      // Permission denied or no clipboard API: point the user at Ctrl+V instead.
+      setPasteError(true);
+      setTimeout(() => setPasteError(false), 2500);
+    }
+  };
+
   const meta = text
     ? `${formatInt(text.length)} characters${decoded ? ` · ${decoded.encoding}` : ''}`
     : 'paste, or drop a file here';
@@ -86,6 +102,13 @@ export function InputPanel({
       footer={footer}
       actions={
         <>
+          <button
+            type="button"
+            onClick={paste}
+            title="Replace the input with the clipboard's text"
+          >
+            {pasteError ? 'Use Ctrl+V' : 'Paste'}
+          </button>
           <button type="button" onClick={() => fileInput.current?.click()}>
             Open file
           </button>

@@ -1,8 +1,10 @@
 import type { Analysis } from '@/lib/stats';
 import { displayValue, formatInt } from '@/lib/format';
 import { Panel } from './Panel';
+import { CopyTable } from './CopyTable';
 
 const PREVIEW_ROWS = 50;
+const COPY_ROWS = 3;
 
 export function DataPreview({ analysis }: { analysis: Analysis }) {
   const rows = analysis.rows.slice(0, PREVIEW_ROWS);
@@ -12,6 +14,16 @@ export function DataPreview({ analysis }: { analysis: Analysis }) {
       id="preview"
       title="Preview"
       meta={`first ${formatInt(rows.length)} of ${formatInt(analysis.totalDataRows)} data rows`}
+      actions={
+        <CopyTable
+          showTable={false}
+          mdLabel={`Copy top ${COPY_ROWS} as MD`}
+          getData={() => ({
+            headers: analysis.headers,
+            rows: analysis.rows.slice(0, COPY_ROWS),
+          })}
+        />
+      }
     >
       <div className="scroll">
         <table className="preview-table">

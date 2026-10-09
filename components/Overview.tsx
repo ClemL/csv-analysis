@@ -1,5 +1,6 @@
 import type { Analysis } from '@/lib/stats';
 import type { PhiFinding } from '@/lib/phi';
+import type { TableData } from '@/lib/table';
 import { formatBytes, formatInt, formatPercent } from '@/lib/format';
 
 function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -10,6 +11,81 @@ function Tile({ label, value, hint }: { label: string; value: string; hint?: str
       {hint ? <div className="hint">{hint}</div> : null}
     </div>
   );
+}
+
+interface TileData {
+  label: string;
+  value: string;
+  hint?: string;
+}
+
+/** The overview tiles as data, shared by the panel and its copy buttons. */
+export function overviewTiles(analysis: Analysis, autoDetected: boolean): TileData[] {
+  const keyNames = analysis.candidateKeys.map((i) => analysis.headers[i]);
+  return [
+    {
+      label: 'Delimiter',
+      value: analysis.delimiter.display,
+      hint: autoDetected ? `${analysis.delimiter.label} (auto)` : analysis.delimiter.label,
+    },
+    {
+      label: 'Data rows',
+      value: formatInt(analysis.totalDataRows),
+      hint: `${formatInt(analysis.lineCount)} physical lines`,
+    },
+    {
+      label: 'Columns',
+      value: formatInt(analysis.columnCount),
+      hint: `${formatInt(analysis.totalCells)} cells`,
+    },
+    {
+      label: 'Fields parsed',
+      value: formatInt(analysis.filledCells + analysis.missingCells),
+      hint: `${formatInt(analysis.filledCells)} populated`,
+    },
+    {
+      label: 'Null / empty',
+      value: formatInt(analysis.missingCells),
+      hint: analysis.totalCells
+        ? `${formatPercent(analysis.missingCells / analysis.totalCells)} of cells`
+        : '—',
+    },
+    {
+      label: 'Characters',
+      value: formatInt(analysis.charCount),
+      hint: formatBytes(analysis.byteCount),
+    },
+    {
+      label: 'Quoted fields',
+      value: analysis.hasQuotedFields ? 'Yes' : 'No',
+      hint: analysis.hasQuotedFields ? 'RFC 4180 quoting applied' : 'No quoting detected',
+    },
+    {
+      label: 'Duplicate rows',
+      value: formatInt(analysis.duplicateRows),
+      hint: analysis.duplicateRows
+        ? `${formatInt(analysis.duplicateGroups)} repeated value(s)`
+        : 'every row is distinct',
+    },
+    {
+      label: 'Candidate keys',
+      value: keyNames.length ? String(keyNames.length) : 'None',
+      hint: keyNames.length ? keyNames.slice(0, 3).join(', ') : 'no column is unique',
+    },
+    {
+      label: 'Blank lines',
+      value: formatInt(analysis.emptyRows),
+      hint: 'skipped before profiling',
+    },
+  ];
+}
+
+/** The overview tiles as a Metric / Value / Detail grid for copying. */
+export function overviewTable(analysis: Analysis, autoDetected: boolean): TableData {
+  return {
+    headers: ['Metric', 'Value', 'Detail'],
+    rows: overviewTiles(analysis, autoDetected).map((t) => [t.label, t.value, t.hint ?? '']),
+  };
 }
 
 export function Overview({
@@ -101,8 +177,6 @@ export function Overview({
     });
   }
 
-  const keyNames = analysis.candidateKeys.map((i) => analysis.headers[i]);
-
   return (
     <>
       {phi.length > 0 ? (
@@ -117,64 +191,9 @@ export function Overview({
       ) : null}
 
       <div className="tiles">
-        <Tile
-          label="Delimiter"
-          value={analysis.delimiter.display}
-          hint={autoDetected ? `${analysis.delimiter.label} (auto)` : analysis.delimiter.label}
-        />
-        <Tile
-          label="Data rows"
-          value={formatInt(analysis.totalDataRows)}
-          hint={`${formatInt(analysis.lineCount)} physical lines`}
-        />
-        <Tile
-          label="Columns"
-          value={formatInt(analysis.columnCount)}
-          hint={`${formatInt(analysis.totalCells)} cells`}
-        />
-        <Tile
-          label="Fields parsed"
-          value={formatInt(analysis.filledCells + analysis.missingCells)}
-          hint={`${formatInt(analysis.filledCells)} populated`}
-        />
-        <Tile
-          label="Null / empty"
-          value={formatInt(analysis.missingCells)}
-          hint={
-            analysis.totalCells
-              ? `${formatPercent(analysis.missingCells / analysis.totalCells)} of cells`
-              : '—'
-          }
-        />
-        <Tile
-          label="Characters"
-          value={formatInt(analysis.charCount)}
-          hint={formatBytes(analysis.byteCount)}
-        />
-        <Tile
-          label="Quoted fields"
-          value={analysis.hasQuotedFields ? 'Yes' : 'No'}
-          hint={analysis.hasQuotedFields ? 'RFC 4180 quoting applied' : 'No quoting detected'}
-        />
-        <Tile
-          label="Duplicate rows"
-          value={formatInt(analysis.duplicateRows)}
-          hint={
-            analysis.duplicateRows
-              ? `${formatInt(analysis.duplicateGroups)} repeated value(s)`
-              : 'every row is distinct'
-          }
-        />
-        <Tile
-          label="Candidate keys"
-          value={keyNames.length ? String(keyNames.length) : 'None'}
-          hint={keyNames.length ? keyNames.slice(0, 3).join(', ') : 'no column is unique'}
-        />
-        <Tile
-          label="Blank lines"
-          value={formatInt(analysis.emptyRows)}
-          hint="skipped before profiling"
-        />
+        {overviewTiles(analysis, autoDetected).map((t) => (
+          <Tile key={t.label} label={t.label} value={t.value} hint={t.hint} />
+        ))}
       </div>
 
       {notices.length > 0 ? (
