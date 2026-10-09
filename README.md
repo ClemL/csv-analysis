@@ -18,7 +18,8 @@ see [Desktop app](#desktop-app).
 - Five modes: **Analyze** one file, **Compare two files** side by side,
   **Contract check** a file against the schema it has to load into, read a
   **BCP log**, or **Generate sample data** from the openFDA drug directory.
-- Large paste area, or drag and drop / open a local file.
+- Large paste area with a **Paste** button that reads the clipboard, or drag
+  and drop / open a local file.
 - Opened files are decoded from their bytes, not assumed to be UTF-8. A
   byte-order mark wins; otherwise strict UTF-8 is tried and Windows-1252 is the
   fallback, with a notice saying so and a manual override. This matters: reading
@@ -55,6 +56,12 @@ see [Desktop app](#desktop-app).
 | Record | Row 1 rendered as key/value pairs, copyable as JSON |
 | Column | Inferred type, fill rate, null/empty count (split into blanks and null tokens), distinct count, min/max range, mean / median for numerics, min/max/avg length for text, date range, five most common values, whether it can serve as a key, and the values that do not fit its type |
 | Preview | First 50 data rows in a scrollable table, with empty and whitespace-only cells marked |
+
+**Copying results** — Overview and Columns each have **Copy as table** and
+**Copy as MD**; Preview has **Copy top 3 as MD**. *Copy as table* puts an HTML
+table and a tab-separated version on the clipboard together, so Outlook, Word
+and Teams paste a formatted table and Excel pastes cells. *Copy as MD* writes a
+GitHub-flavored Markdown table, with `|` escaped and in-cell newlines as `<br>`.
 
 **Azure SQL** — an optional "SQL types (Azure SQL)" setting adds an inferred
 T-SQL type per column and a script generator. See below.
@@ -494,6 +501,7 @@ components/
   EfModelPanel.tsx  EF entity generation and its placeholders
   ContractView.tsx  contract input, findings and the column-by-column table
   ScriptBox.tsx     read-only generated file with copy and download
+  CopyTable.tsx     copy-as-table and copy-as-Markdown buttons
   useDataset.ts     parse, profile, SQL types and PHI scan for one dataset
   Overview.tsx      file-level tiles and data-quality notices
   FirstRecord.tsx   row 1 as key/value pairs
@@ -511,6 +519,7 @@ lib/
   efmodel.ts        CLR type mapping, property naming and entity rendering
   contract.ts       EF and DDL parsing, and checking a file against either
   format.ts         display formatting
+  table.ts          Markdown, TSV and HTML table serialization
 electron/
   main.mjs          desktop shell: app:// scheme, window and menu
 build/
@@ -524,6 +533,7 @@ tests/
   ndc.test.ts       URL building and generator tests, against a fixture
   efmodel.test.ts   type mapping, naming rules and rendered-shape tests
   contract.test.ts  parser and check tests, against a real landing model
+  table.test.ts     Markdown, TSV and HTML table escaping
   fixtures/         a captured openFDA response, so tests need no network
 electron-builder.yml  desktop packaging targets
 ```

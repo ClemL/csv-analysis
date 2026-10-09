@@ -5,7 +5,9 @@ import type { Analysis, ColumnProfile } from '@/lib/stats';
 import type { SqlColumn } from '@/lib/sql';
 import type { PhiFinding } from '@/lib/phi';
 import { formatInt, formatNumber, formatPercent } from '@/lib/format';
+import type { TableData } from '@/lib/table';
 import { Panel } from './Panel';
+import { CopyTable } from './CopyTable';
 
 function FillBar({ rate }: { rate: number }) {
   const tone = rate === 0 ? 'empty' : rate < 0.9 ? 'low' : '';
@@ -60,6 +62,43 @@ function TypeCell({
   );
 }
 
+/** The columns table as plain text cells, matching the on-screen columns. */
+function columnsTable(
+  analysis: Analysis,
+  sqlColumns: SqlColumn[] | undefined,
+  phiByColumn: Map<number, PhiFinding>,
+): TableData {
+  const headers = ['#', 'Name', 'Type'];
+  if (sqlColumns) headers.push('SQL type');
+  headers.push('Filled', 'Null / empty', 'Distinct', 'Range', 'Center', 'Most common');
+
+  const rows = analysis.columns.map((col) => {
+    const flags = [col.isCandidateKey ? 'key' : '', phiByColumn.has(col.index) ? 'phi?' : '']
+      .filter(Boolean)
+      .join(', ');
+    const sql = sqlColumns?.[col.index];
+    const row = [
+      String(col.index + 1),
+      flags ? `${col.name} (${flags})` : col.name,
+      col.mismatchCount ? `${col.type} (${formatInt(col.mismatchCount)} off)` : col.type,
+    ];
+    if (sqlColumns) row.push(sql ? `${sql.type} ${sql.nullable ? 'NULL' : 'NOT NULL'}` : '');
+    row.push(
+      formatPercent(col.fillRate),
+      col.nullToken > 0
+        ? `${formatInt(col.missing)} (${formatInt(col.nullToken)} token)`
+        : formatInt(col.missing),
+      formatInt(col.distinct),
+      range(col),
+      central(col),
+      col.topValues.length ? col.topValues.map((v) => `${v.value} (${v.count})`).join(', ') : '—',
+    );
+    return row;
+  });
+
+  return { headers, rows };
+}
+
 export function ColumnStats({
   analysis,
   sqlColumns,
@@ -81,6 +120,7 @@ export function ColumnStats({
       meta={`${formatInt(analysis.columnCount)} columns over ${formatInt(
         analysis.dataRowCount,
       )} profiled rows`}
+      actions={<CopyTable getData={() => columnsTable(analysis, sqlColumns, phiByColumn)} />}
     >
       <div className="scroll">
         <table>

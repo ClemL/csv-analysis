@@ -7,7 +7,8 @@ import { formatInt } from '@/lib/format';
 import { DEFAULT_SETTINGS, MAX_CHARS, useDataset, type Settings } from './useDataset';
 import { InputPanel } from './InputPanel';
 import { Panel } from './Panel';
-import { Overview } from './Overview';
+import { Overview, overviewTable } from './Overview';
+import { CopyTable } from './CopyTable';
 import { FirstRecord } from './FirstRecord';
 import { ColumnStats } from './ColumnStats';
 import { DataPreview } from './DataPreview';
@@ -208,7 +209,17 @@ export function Analyzer() {
 
           {a.analysis ? (
             <>
-              <Panel id="overview" title="Overview">
+              <Panel
+                id="overview"
+                title="Overview"
+                actions={
+                  <CopyTable
+                    getData={() =>
+                      overviewTable(a.analysis!, settings.delimiterId === 'auto')
+                    }
+                  />
+                }
+              >
                 <Overview
                   analysis={a.analysis}
                   autoDetected={settings.delimiterId === 'auto'}
