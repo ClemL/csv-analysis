@@ -1028,3 +1028,50 @@ td.wrap {
   white-space: normal;
   min-width: 260px;
 }
+
+/* Large file: the notice sits above a read-only preview of the first lines. */
+.large-file {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 0;
+}
+
+.large-file textarea {
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.profile-status {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.profile-status .bar {
+  width: 140px;
+}
+
+.ndc-body {
+  display: grid;
+  gap: 22px;
+}
+
+.ndc-column {
+  display: grid;
+  gap: 10px;
+}
+
+.ndc-column h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ndc-column h3 .faint {
+  font-weight: 400;
+  font-size: 12.5px;
+}

@@ -704,7 +704,8 @@ export function sameTableReimportOptions(command: BcpCommand): ReimportOptions {
   };
 }
 
-function quoteArg(value: string): string {
+/** Quotes a command-line argument when it contains spaces or quotes. */
+export function quoteArg(value: string): string {
   return /[\s"]/.test(value) || value === '' ? `"${value.replace(/"/g, '""')}"` : value;
 }
 

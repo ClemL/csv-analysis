@@ -3,14 +3,27 @@
 import { useState } from 'react';
 import type { Analysis } from '@/lib/stats';
 import { displayValue } from '@/lib/format';
+import { maskValue } from '@/lib/phi';
 import { Panel } from './Panel';
 
 /** Renders row 1 as key/value pairs so the shape of a record is obvious. */
-export function FirstRecord({ analysis }: { analysis: Analysis }) {
+const NO_COLUMNS: ReadonlySet<number> = new Set();
+
+export function FirstRecord({
+  analysis,
+  maskColumns = NO_COLUMNS,
+}: {
+  analysis: Analysis;
+  /** Columns whose values are masked when copied. */
+  maskColumns?: ReadonlySet<number>;
+}) {
   const [copied, setCopied] = useState(false);
 
   const asObject = Object.fromEntries(
-    analysis.firstRecord.map((f) => [f.key, f.isMissing && f.value === '' ? null : f.value]),
+    analysis.firstRecord.map((f, i) => [
+      f.key,
+      f.isMissing && f.value === '' ? null : maskColumns.has(i) ? maskValue(f.value) : f.value,
+    ]),
   );
 
   const copy = async () => {
@@ -28,7 +41,11 @@ export function FirstRecord({ analysis }: { analysis: Analysis }) {
       id="first-record"
       title="First record"
       actions={
-        <button type="button" onClick={copy}>
+        <button
+          type="button"
+          onClick={copy}
+          title={maskColumns.size ? 'Values in flagged PHI columns are masked' : undefined}
+        >
           {copied ? 'Copied' : 'Copy as JSON'}
         </button>
       }

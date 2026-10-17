@@ -1,12 +1,22 @@
 import type { Analysis } from '@/lib/stats';
 import { displayValue, formatInt } from '@/lib/format';
 import { Panel } from './Panel';
+import { maskRows } from '@/lib/phi';
 import { CopyTable } from './CopyTable';
 
 const PREVIEW_ROWS = 50;
 const COPY_ROWS = 3;
 
-export function DataPreview({ analysis }: { analysis: Analysis }) {
+const NO_COLUMNS: ReadonlySet<number> = new Set();
+
+export function DataPreview({
+  analysis,
+  maskColumns = NO_COLUMNS,
+}: {
+  analysis: Analysis;
+  /** Columns whose values are masked when copied. */
+  maskColumns?: ReadonlySet<number>;
+}) {
   const rows = analysis.rows.slice(0, PREVIEW_ROWS);
 
   return (
@@ -18,9 +28,10 @@ export function DataPreview({ analysis }: { analysis: Analysis }) {
         <CopyTable
           showTable={false}
           mdLabel={`Copy top ${COPY_ROWS} as MD`}
+          title={maskColumns.size ? 'Values in flagged PHI columns are masked' : undefined}
           getData={() => ({
             headers: analysis.headers,
-            rows: analysis.rows.slice(0, COPY_ROWS),
+            rows: maskRows(analysis.rows.slice(0, COPY_ROWS), maskColumns),
           })}
         />
       }

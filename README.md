@@ -20,6 +20,10 @@ see [Desktop app](#desktop-app).
   **BCP log**, or **Generate sample data** from the openFDA drug directory.
 - Large paste area with a **Paste** button that reads the clipboard, or drag
   and drop / open a local file.
+- Parsing and profiling run in a background thread (a Web Worker), so the page
+  stays responsive. Files over 5 MB are not loaded into the editor at all: they
+  are read from disk in chunks, every row is profiled, and the editor shows the
+  first 200 lines read-only with a progress bar while the rest is read.
 - Opened files are decoded from their bytes, not assumed to be UTF-8. A
   byte-order mark wins; otherwise strict UTF-8 is tried and Windows-1252 is the
   fallback, with a notice saying so and a manual override. This matters: reading
@@ -96,6 +100,34 @@ value patterns are both used, and the rules are written to avoid false positives
   account number, an NDC, a claim ID — does not flag.
 - **A postal code alone is not identifying**, only in company with something
   else.
+
+**Masking PHI when copying** — when columns are flagged, a **Mask PHI when
+copying** setting appears in the toolbar, on by default. The Columns, Preview
+and First record copy buttons then replace letters with `x` and digits with `#`
+in the flagged columns (`123-45-6789` becomes `###-##-####`), including the
+most common values, numeric and date ranges, and medians. Counts, lengths and
+the screen itself are unchanged. The generated SQL is not masked, since loading
+the real values is its purpose.
+
+**NDC check** — a column named like an NDC (`ndc`, `ndc11`, `package_ndc`,
+`national_drug_code`), or one where at least 80% of values have the hyphenated
+NDC shape, gets an NDC panel. Each value is classified as 11 digits, 5-4-2,
+one of the 10-digit layouts (4-4-2, 5-3-2, 5-4-1), 10 bare digits, a
+labeler-product code with no package segment, 6–9 digits (leading zeros
+dropped by a spreadsheet or a numeric column), a spreadsheet number
+(`9.37147E+07`, `93714656.0`), or not an NDC. The panel reports:
+
+- **Leading zeros lost** and **converted to numbers**, with examples. Scientific
+  notation has already lost digits and cannot be repaired.
+- **10 digits, no hyphens**: these cannot be converted reliably, because the
+  layout that says which segment to pad is gone.
+- **Mixed formats**: 10- and 11-digit, or hyphenated and bare, in one column,
+  which makes joins miss rows.
+- A T-SQL `CASE` expression that converts every recoverable form to the
+  11-digit 5-4-2 form, and returns `NULL` where the layout cannot be known.
+
+NDC columns are also kept character-typed in the generated SQL and EF model,
+so a numeric-looking NDC never lands in an integer column.
 
 **Data-quality warnings**
 
@@ -384,6 +416,40 @@ if you are running the script through a driver such as `SqlClient`. The
 `DROP TABLE` guard is emitted commented out — a generated script tends to get
 pasted into whichever connection happens to be open.
 
+
+## Load command
+
+Below the SQL script, a **Load command** section writes the command that loads
+the file into the table: a `bcp … in` command line, or a `BULK INSERT`
+statement. The table name is shared with the SQL script section, and an opened
+file's name fills in the data file.
+
+The tool is recommended from the file. bcp has no notion of quoting: a quoted
+value keeps its quotes, and a delimiter or line break inside quotes splits the
+row. So a file with quoted fields gets `BULK INSERT … WITH (FORMAT = 'CSV',
+FIELDQUOTE = '"')` (SQL Server 2017 and later, and Azure SQL), and an unquoted
+one gets bcp. Either can be chosen by hand.
+
+- **Terminators** come from the detected delimiter and line endings. `\n`
+  means CRLF to both tools, so a file with LF-only rows gets `0x0a`. Terminators
+  are always quoted on the bcp command line, because `,` `;` and `|` mean
+  something to cmd or PowerShell.
+- **Header**: `-F 2` / `FIRSTROW = 2` when the first line is a header.
+- **Encoding**: UTF-8 (`-C 65001` / `CODEPAGE = '65001'`), Windows-1252, or
+  UTF-16 (`-w` / `DATAFILETYPE = 'widechar'`).
+- **bcp sign-in**: Entra ID (`-G`), Windows (`-T`) or a SQL login (`-U`). The
+  password is never put on the command line; bcp prompts for it.
+- **BULK INSERT source**: Azure Blob Storage, with the one-time master key,
+  SAS credential and external data source written out as comments, or a path
+  on the SQL Server machine.
+- Batch size, max errors, an error file, `KEEPNULLS` and `TABLOCK`.
+
+Notes above the command say what will go wrong first: quoting under bcp,
+ragged rows, an unclosed quote, mixed CRLF/LF endings, `NULL`/`NA` tokens that
+load as text, numbers written with `$` or thousands separators that will not
+convert, m/d/y dates that depend on the login's language, that fields map by
+position, and the permissions BULK INSERT needs.
+
 ## Running locally
 
 ```bash
@@ -399,6 +465,9 @@ npm start          # serve the production build
 npm test           # unit tests for the parser and profiler (node:test)
 npm run typecheck  # tsc --noEmit
 ```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the typecheck, the tests, the
+web build and the desktop static export on every push and pull request.
 
 ## Deploying to Vercel
 
@@ -501,25 +570,32 @@ components/
   Analyzer.tsx      client component: input, toolbar, state
   Panel.tsx         collapsible section with remembered state
   Menu.tsx          dropdown menu button
-  InputPanel.tsx    paste area, file opening and byte decoding
+  InputPanel.tsx    paste area, file opening, byte decoding and large files
   CompareView.tsx   schema and row reconciliation between two datasets
   GeneratorView.tsx openFDA search, sample shaping and output
   EfModelPanel.tsx  EF entity generation and its placeholders
   ContractView.tsx  contract input, findings and the column-by-column table
   ScriptBox.tsx     read-only generated file with copy and download
   CopyTable.tsx     copy-as-table and copy-as-Markdown buttons
-  useDataset.ts     parse, profile, SQL types and PHI scan for one dataset
+  useDataset.ts     background profile, SQL types and PHI scan for one dataset
+  profileClient.ts  starts and cancels the worker; main-thread fallback
   Overview.tsx      file-level tiles and data-quality notices
   FirstRecord.tsx   row 1 as key/value pairs
   ColumnStats.tsx   per-column profile table
   DataPreview.tsx   scrollable row preview
   SqlPanel.tsx      table name, generate button, read-only script boxes
+  NdcPanel.tsx      NDC forms per column, issues and the T-SQL fix
+  LoadPanel.tsx     bcp / BULK INSERT options, notes and the command
 lib/
-  csv.ts            parser and delimiter detection
-  stats.ts          type inference and column profiling
+  csv.ts            incremental parser and delimiter detection
+  stats.ts          type inference and streaming column profiling
+  profile.ts        text and file profiling: sniffing, streamed decoding, progress
+  profile.worker.ts the background worker
   sql.ts            Azure SQL type inference and script generation
   encoding.ts       byte-order marks and encoding fallback
   phi.ts            PHI and personal-identifier heuristics
+  ndccheck.ts       NDC layouts, 11-digit conversion and column reports
+  load.ts           bcp and BULK INSERT commands for loading the file
   diff.ts           comparison of two datasets
   ndc.ts            openFDA client and sample-file generators
   efmodel.ts        CLR type mapping, property naming and entity rendering
@@ -535,23 +611,32 @@ tests/
   sql.test.ts       SQL inference and script generation tests
   encoding.test.ts  decoding and fallback tests
   phi.test.ts       identifier-detection tests, including false positives
+  ndccheck.test.ts  NDC classification, conversion and column reports
+  load.test.ts      load commands, terminators and notes
   diff.test.ts      comparison tests
   ndc.test.ts       URL building and generator tests, against a fixture
   efmodel.test.ts   type mapping, naming rules and rendered-shape tests
   contract.test.ts  parser and check tests, against a real landing model
   table.test.ts     Markdown, TSV and HTML table escaping
+  profile.test.ts   chunked parsing and profiling, estimates, streamed decoding
   fixtures/         a captured openFDA response, so tests need no network
 electron-builder.yml  desktop packaging targets
 ```
 
 ## Limits
 
-- Input over 5,000,000 characters is clipped, and the app says so.
+- Every row is profiled, however large the file. Counts, fill rates, types,
+  type mismatches, ranges, means, keys and duplicates are exact. Past these
+  caps, to bound memory, the profile switches to estimates and marks them:
+  distinct counts stop at 50,000 values per column (shown as `≥`, except for a
+  column that is still unique, whose count stays exact), the most common values
+  are counted over those 50,000 (`≈`), the median comes from a uniform sample of
+  100,000 numbers (`≈`), and duplicate detection tracks 2,000,000 distinct rows.
+- The first 20,000 rows are kept for the preview, PHI scan, NDC check, contract
+  check, comparison and `INSERT` script.
 - `INSERT` generation covers the first 5,000 data rows; past that the script
   stops being something you would paste by hand, and the app says how many rows
   were left out.
-- Column profiling covers the first 20,000 data rows; row and line counts still
-  reflect the whole input, and the app reports when profiling was capped.
-- Parsing is synchronous on the main thread. 100,000 rows (~4.4 MB) parse and
-  profile in roughly 350 ms; React's `useDeferredValue` keeps typing responsive
-  above that.
+- Throughput is roughly 8 MB of text per second: a 1,000,000-row, 106 MB claims
+  extract profiles in about 13 seconds and holds about 115 MB of memory. Where a
+  worker cannot start, the same code runs on the main thread.

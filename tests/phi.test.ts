@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { delimiterById } from '../lib/csv.ts';
 import { analyze } from '../lib/stats.ts';
-import { IDENTIFIER_CATEGORIES, isValidNpi, scanForPhi } from '../lib/phi.ts';
+import { IDENTIFIER_CATEGORIES, isValidNpi, maskRows, maskValue, scanForPhi } from '../lib/phi.ts';
 
 const options = {
   delimiter: delimiterById('comma'),
@@ -176,4 +176,12 @@ test('identifier categories are the code-like ones only', () => {
   ]);
   assert.equal(IDENTIFIER_CATEGORIES.has('date-of-birth'), false);
   assert.equal(IDENTIFIER_CATEGORIES.has('name'), false);
+});
+
+test('masking keeps the shape of a value but not the value', () => {
+  assert.equal(maskValue('123-45-6789'), '###-##-####');
+  assert.equal(maskValue('Ann.O’Brien@mail.org'), 'xxx.x’xxxxx@xxxx.xxx');
+  assert.equal(maskValue('José Núñez'), 'xxxx xxxxx');
+  assert.equal(maskValue(''), '');
+  assert.deepEqual(maskRows([['1', 'Ann', 'x'], ['2', 'Bo']], new Set([1])), [['1', 'xxx', 'x'], ['2', 'xx']]);
 });

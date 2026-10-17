@@ -1,10 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { DELIMITERS, type DelimiterId } from '@/lib/csv';
 import { ENCODINGS, type EncodingId } from '@/lib/encoding';
-import { formatInt } from '@/lib/format';
-import { DEFAULT_SETTINGS, MAX_CHARS, useDataset, type Settings } from './useDataset';
+import { DEFAULT_SETTINGS, useDataset, type Settings } from './useDataset';
 import { InputPanel } from './InputPanel';
 import { Panel } from './Panel';
 import { Overview, overviewTable } from './Overview';
@@ -12,6 +11,8 @@ import { CopyTable } from './CopyTable';
 import { FirstRecord } from './FirstRecord';
 import { ColumnStats } from './ColumnStats';
 import { DataPreview } from './DataPreview';
+import { NdcPanel } from './NdcPanel';
+import { LoadPanel } from './LoadPanel';
 import { SqlPanel } from './SqlPanel';
 import { EfModelPanel } from './EfModelPanel';
 import { CompareView } from './CompareView';
@@ -29,34 +30,36 @@ const MODE_LABELS: Record<Mode, string> = {
   generate: 'Generate sample data',
 };
 
-function Clipped() {
-  return (
-    <div className="panel">
-      <div className="panel-body">
-        <div className="notice warn">
-          Input exceeds {formatInt(MAX_CHARS)} characters. Only the first {formatInt(MAX_CHARS)}{' '}
-          were analyzed.
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function Analyzer() {
   const [mode, setMode] = useState<Mode>('analyze');
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [textA, setTextA] = useState('');
   const [textB, setTextB] = useState('');
+  const [fileA, setFileA] = useState<File | null>(null);
+  const [fileB, setFileB] = useState<File | null>(null);
+  const [maskPhi, setMaskPhi] = useState(true);
+  const [nameA, setNameA] = useState<string | null>(null);
+  const [tableName, setTableName] = useState('dbo.ImportedData');
 
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) =>
     setSettings((prev) => ({ ...prev, [key]: value }));
 
-  const a = useDataset(textA, settings);
-  const b = useDataset(textB, settings);
+  const a = useDataset(textA, fileA, settings);
+  const b = useDataset(textB, fileB, settings);
+  const maskColumns = useMemo(
+    () => new Set(maskPhi ? a.phi.map((f) => f.columnIndex) : []),
+    [maskPhi, a.phi],
+  );
 
   const useGenerated = (target: 'analyze' | 'a' | 'b', text: string) => {
-    if (target === 'b') setTextB(text);
-    else setTextA(text);
+    if (target === 'b') {
+      setFileB(null);
+      setTextB(text);
+    } else {
+      setFileA(null);
+      setNameA(null);
+      setTextA(text);
+    }
     setMode(target === 'analyze' ? 'analyze' : 'compare');
   };
 
@@ -127,6 +130,16 @@ export function Analyzer() {
         />
         SQL types (Azure SQL)
       </label>
+
+      {mode === 'analyze' && a.phi.length > 0 ? (
+        <label
+          className="field"
+          title="Copy buttons replace letters with x and digits with # in the columns flagged as possible PHI. What is shown on screen is unchanged."
+        >
+          <input type="checkbox" checked={maskPhi} onChange={(e) => setMaskPhi(e.target.checked)} />
+          Mask PHI when copying
+        </label>
+      ) : null}
     </div>
   );
 
@@ -186,11 +199,13 @@ export function Analyzer() {
                   title="Data file"
                   text={textA}
                   onText={setTextA}
+                  file={fileA}
+                  onFile={setFileA}
+                  status={a}
                   encoding={settings.encoding}
                   compact
                   footer={toolbar}
                 />
-                {a.clipped ? <Clipped /> : null}
               </>
             }
           />
@@ -202,10 +217,13 @@ export function Analyzer() {
             title="Input"
             text={textA}
             onText={setTextA}
+            file={fileA}
+            onFile={setFileA}
+            status={a}
+            onName={setNameA}
             encoding={settings.encoding}
             footer={toolbar}
           />
-          {a.clipped ? <Clipped /> : null}
 
           {a.analysis ? (
             <>
@@ -226,12 +244,20 @@ export function Analyzer() {
                   phi={a.phi}
                 />
               </Panel>
-              <FirstRecord analysis={a.analysis} />
+              <FirstRecord analysis={a.analysis} maskColumns={maskColumns} />
               <ColumnStats
                 analysis={a.analysis}
                 sqlColumns={a.sqlColumns ?? undefined}
                 phi={a.phi}
+                maskColumns={maskColumns}
               />
+              {a.ndc.length > 0 ? (
+                <NdcPanel
+                  reports={a.ndc}
+                  rowsChecked={a.analysis.rows.length}
+                  truncated={a.analysis.truncated}
+                />
+              ) : null}
               {a.sqlColumns ? (
                 <>
                   <SqlPanel
@@ -239,16 +265,26 @@ export function Analyzer() {
                     columns={a.sqlColumns}
                     staging={settings.staging}
                     onStagingChange={(value) => set('staging', value)}
+                    tableName={tableName}
+                    onTableNameChange={setTableName}
                   />
                   <EfModelPanel columns={a.sqlColumns} />
                 </>
               ) : null}
-              <DataPreview analysis={a.analysis} />
+              <LoadPanel
+                analysis={a.analysis}
+                table={tableName}
+                hasHeader={settings.hasHeader}
+                fileName={nameA}
+              />
+              <DataPreview analysis={a.analysis} maskColumns={maskColumns} />
             </>
           ) : (
             <section className="panel">
               <div className="empty-state">
-                Paste delimited text above to see structure, column types and statistics.
+                {a.pending
+                  ? 'Profiling…'
+                  : 'Paste delimited text above to see structure, column types and statistics.'}
               </div>
             </section>
           )}
@@ -261,6 +297,9 @@ export function Analyzer() {
               title="A"
               text={textA}
               onText={setTextA}
+              file={fileA}
+              onFile={setFileA}
+              status={a}
               encoding={settings.encoding}
               compact
             />
@@ -269,12 +308,14 @@ export function Analyzer() {
               title="B"
               text={textB}
               onText={setTextB}
+              file={fileB}
+              onFile={setFileB}
+              status={b}
               encoding={settings.encoding}
               compact
             />
           </div>
           <section className="panel">{toolbar}</section>
-          {a.clipped || b.clipped ? <Clipped /> : null}
 
           {a.analysis && b.analysis ? (
             <CompareView a={a.analysis} b={b.analysis} />

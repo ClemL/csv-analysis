@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { formatInt } from '@/lib/format';
+import { formatBytes, formatInt, formatPercent } from '@/lib/format';
 import { decodeBytes, encodingLabel, type EncodingId } from '@/lib/encoding';
+import type { DecodeInfo } from '@/lib/profile';
 import { Panel } from './Panel';
+import { LARGE_FILE_BYTES } from './useDataset';
 
 const PLACEHOLDER = `Paste a CSV here — the full file or just the first few lines.
 
@@ -14,11 +16,25 @@ claim_id,ndc,fill_date,quantity,unit_cost
 Comma, pipe, triple pipe (|||), tab and semicolon are all recognized.
 No sample handy? The Generate tab builds one from the openFDA NDC directory.`;
 
+/** What the background profile reports back about this input. */
+export interface InputStatus {
+  pending: boolean;
+  progress: number;
+  error: string | null;
+  /** For a large file. */
+  decoded?: DecodeInfo;
+  head?: string;
+}
+
 export function InputPanel({
   id,
   title,
   text,
   onText,
+  file,
+  onFile,
+  status,
+  onName,
   encoding,
   compact = false,
   footer,
@@ -27,6 +43,12 @@ export function InputPanel({
   title: string;
   text: string;
   onText: (value: string) => void;
+  /** A file too large for the editor, profiled from disk instead. */
+  file: File | null;
+  onFile: (file: File | null) => void;
+  status: InputStatus;
+  /** The opened file's name, or null once the input is pasted, typed or cleared. */
+  onName?: (name: string | null) => void;
   encoding: EncodingId;
   /** Shorter textarea, for the side-by-side compare layout. */
   compact?: boolean;
@@ -51,13 +73,24 @@ export function InputPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bytes, encoding]);
 
-  const openFile = (file: File) => {
-    file.arrayBuffer().then(setBytes);
+  const openFile = (opened: File) => {
+    onName?.(opened.name);
+    if (opened.size > LARGE_FILE_BYTES) {
+      setBytes(null);
+      setDecoded(undefined);
+      onText('');
+      onFile(opened);
+      return;
+    }
+    onFile(null);
+    opened.arrayBuffer().then(setBytes);
   };
 
   const clear = () => {
     setBytes(null);
     setDecoded(undefined);
+    onFile(null);
+    onName?.(null);
     onText('');
   };
 
@@ -69,6 +102,8 @@ export function InputPanel({
       setPasteError(false);
       setBytes(null);
       setDecoded(undefined);
+      onFile(null);
+      onName?.(null);
       onText(value);
     } catch {
       // Permission denied or no clipboard API: point the user at Ctrl+V instead.
@@ -77,16 +112,20 @@ export function InputPanel({
     }
   };
 
-  const meta = text
-    ? `${formatInt(text.length)} characters${decoded ? ` · ${decoded.encoding}` : ''}`
-    : 'paste, or drop a file here';
+  const fileEncoding = status.decoded ? encodingLabel(status.decoded.encoding) : null;
+  const meta = file
+    ? `${file.name} · ${formatBytes(file.size)}${fileEncoding ? ` · ${fileEncoding}` : ''}`
+    : text
+      ? `${formatInt(text.length)} characters${decoded ? ` · ${decoded.encoding}` : ''}`
+      : 'paste, or drop a file here';
+  const fellBack = file ? status.decoded?.fellBack : decoded?.fellBack;
 
   return (
     <Panel
       id={id}
       title={title}
       className={dragging ? 'dropzone' : undefined}
-      forceOpen={!text}
+      forceOpen={!text && !file}
       meta={meta}
       onDragOver={(e) => {
         e.preventDefault();
@@ -112,7 +151,7 @@ export function InputPanel({
           <button type="button" onClick={() => fileInput.current?.click()}>
             Open file
           </button>
-          <button type="button" onClick={clear} disabled={!text}>
+          <button type="button" onClick={clear} disabled={!text && !file}>
             Clear
           </button>
           <input
@@ -129,7 +168,7 @@ export function InputPanel({
         </>
       }
     >
-      {decoded?.fellBack ? (
+      {fellBack ? (
         <div className="panel-body" style={{ paddingBottom: 0 }}>
           <div className="notice warn">
             These bytes are not valid UTF-8, so they were read as Windows-1252. If the accented
@@ -137,18 +176,49 @@ export function InputPanel({
           </div>
         </div>
       ) : null}
-      <textarea
-        className={compact ? 'compact' : undefined}
-        value={text}
-        onChange={(e) => {
-          setBytes(null);
-          setDecoded(undefined);
-          onText(e.target.value);
-        }}
-        placeholder={PLACEHOLDER}
-        spellCheck={false}
-        aria-label={`${title} delimited text`}
-      />
+      {file ? (
+        <div className="panel-body large-file">
+          <div className="notice info">
+            <strong>{file.name}</strong> is {formatBytes(file.size)}, so it is read from disk in a
+            background thread rather than loaded into the editor. Every row is profiled; the
+            first lines are shown below.
+          </div>
+          <textarea
+            className="compact"
+            value={status.head ?? ''}
+            readOnly
+            placeholder="Reading…"
+            spellCheck={false}
+            aria-label={`${title}: first lines of ${file.name}`}
+          />
+        </div>
+      ) : (
+        <textarea
+          className={compact ? 'compact' : undefined}
+          value={text}
+          onChange={(e) => {
+            setBytes(null);
+            setDecoded(undefined);
+            onText(e.target.value);
+          }}
+          placeholder={PLACEHOLDER}
+          spellCheck={false}
+          aria-label={`${title} delimited text`}
+        />
+      )}
+      {status.pending ? (
+        <div className="panel-body profile-status" role="status">
+          <span className="bar">
+            <span style={{ width: `${Math.max(2, status.progress * 100)}%` }} />
+          </span>
+          Profiling{file || text.length > 1_000_000 ? ` · ${formatPercent(status.progress)}` : '…'}
+        </div>
+      ) : null}
+      {status.error ? (
+        <div className="panel-body">
+          <div className="notice bad">Could not profile this input: {status.error}</div>
+        </div>
+      ) : null}
     </Panel>
   );
 }
