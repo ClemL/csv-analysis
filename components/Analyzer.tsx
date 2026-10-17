@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import { DELIMITERS, type DelimiterId } from '@/lib/csv';
 import { ENCODINGS, type EncodingId } from '@/lib/encoding';
-import { formatInt } from '@/lib/format';
-import { DEFAULT_SETTINGS, MAX_CHARS, useDataset, type Settings } from './useDataset';
+import { DEFAULT_SETTINGS, useDataset, type Settings } from './useDataset';
 import { InputPanel } from './InputPanel';
 import { Panel } from './Panel';
 import { Overview, overviewTable } from './Overview';
@@ -29,34 +28,28 @@ const MODE_LABELS: Record<Mode, string> = {
   generate: 'Generate sample data',
 };
 
-function Clipped() {
-  return (
-    <div className="panel">
-      <div className="panel-body">
-        <div className="notice warn">
-          Input exceeds {formatInt(MAX_CHARS)} characters. Only the first {formatInt(MAX_CHARS)}{' '}
-          were analyzed.
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function Analyzer() {
   const [mode, setMode] = useState<Mode>('analyze');
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [textA, setTextA] = useState('');
   const [textB, setTextB] = useState('');
+  const [fileA, setFileA] = useState<File | null>(null);
+  const [fileB, setFileB] = useState<File | null>(null);
 
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) =>
     setSettings((prev) => ({ ...prev, [key]: value }));
 
-  const a = useDataset(textA, settings);
-  const b = useDataset(textB, settings);
+  const a = useDataset(textA, fileA, settings);
+  const b = useDataset(textB, fileB, settings);
 
   const useGenerated = (target: 'analyze' | 'a' | 'b', text: string) => {
-    if (target === 'b') setTextB(text);
-    else setTextA(text);
+    if (target === 'b') {
+      setFileB(null);
+      setTextB(text);
+    } else {
+      setFileA(null);
+      setTextA(text);
+    }
     setMode(target === 'analyze' ? 'analyze' : 'compare');
   };
 
@@ -186,11 +179,13 @@ export function Analyzer() {
                   title="Data file"
                   text={textA}
                   onText={setTextA}
+                  file={fileA}
+                  onFile={setFileA}
+                  status={a}
                   encoding={settings.encoding}
                   compact
                   footer={toolbar}
                 />
-                {a.clipped ? <Clipped /> : null}
               </>
             }
           />
@@ -202,10 +197,12 @@ export function Analyzer() {
             title="Input"
             text={textA}
             onText={setTextA}
+            file={fileA}
+            onFile={setFileA}
+            status={a}
             encoding={settings.encoding}
             footer={toolbar}
           />
-          {a.clipped ? <Clipped /> : null}
 
           {a.analysis ? (
             <>
@@ -248,7 +245,9 @@ export function Analyzer() {
           ) : (
             <section className="panel">
               <div className="empty-state">
-                Paste delimited text above to see structure, column types and statistics.
+                {a.pending
+                  ? 'Profiling…'
+                  : 'Paste delimited text above to see structure, column types and statistics.'}
               </div>
             </section>
           )}
@@ -261,6 +260,9 @@ export function Analyzer() {
               title="A"
               text={textA}
               onText={setTextA}
+              file={fileA}
+              onFile={setFileA}
+              status={a}
               encoding={settings.encoding}
               compact
             />
@@ -269,12 +271,14 @@ export function Analyzer() {
               title="B"
               text={textB}
               onText={setTextB}
+              file={fileB}
+              onFile={setFileB}
+              status={b}
               encoding={settings.encoding}
               compact
             />
           </div>
           <section className="panel">{toolbar}</section>
-          {a.clipped || b.clipped ? <Clipped /> : null}
 
           {a.analysis && b.analysis ? (
             <CompareView a={a.analysis} b={b.analysis} />

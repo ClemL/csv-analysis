@@ -31,6 +31,12 @@ export function delimiterById(id: Exclude<DelimiterId, 'auto'>): DelimiterOption
   return found;
 }
 
+export interface RowEndings {
+  crlf: number;
+  lf: number;
+  cr: number;
+}
+
 export interface ParseResult {
   rows: string[][];
   /** True when at least one field in the source was quoted. */
@@ -39,6 +45,143 @@ export interface ParseResult {
   embeddedNewlines: number;
   /** True when a quoted field was never closed. */
   unterminatedQuote: boolean;
+  /** How records were terminated, outside quoted fields. */
+  rowEndings: RowEndings;
+}
+
+/**
+ * Incremental parser: text is pushed in chunks of any size and each row is
+ * handed to `onRow` as soon as it is complete, so a file never has to be held
+ * in memory whole. Splitting the input differently never changes the rows.
+ */
+export class DelimitedParser {
+  hasQuotedFields = false;
+  embeddedNewlines = 0;
+  unterminatedQuote = false;
+  readonly rowEndings: RowEndings = { crlf: 0, lf: 0, cr: 0 };
+
+  private row: string[] = [];
+  private field = '';
+  private inQuotes = false;
+  private fieldStart = true;
+  /** Unprocessed tail of the last chunk, too short to decide on yet. */
+  private carry = '';
+  /** Characters a decision can look past the current one. */
+  private readonly lookahead: number;
+  private readonly delimiter: string;
+  private readonly onRow: (row: string[]) => void;
+  private readonly quote: string;
+
+  constructor(delimiter: string, onRow: (row: string[]) => void, quote = '"') {
+    this.delimiter = delimiter;
+    this.onRow = onRow;
+    this.quote = quote;
+    this.lookahead = Math.max(delimiter.length, 2) - 1;
+  }
+
+  push(chunk: string): void {
+    this.run(this.carry + chunk, false);
+  }
+
+  /** Flushes the last row. A trailing newline does not produce an extra empty row. */
+  end(): void {
+    this.run(this.carry, true);
+    this.carry = '';
+    this.unterminatedQuote = this.inQuotes;
+    if (this.inQuotes || this.field !== '' || this.row.length > 0) {
+      this.row.push(this.field);
+      this.onRow(this.row);
+      this.row = [];
+      this.field = '';
+    }
+  }
+
+  private run(text: string, final: boolean): void {
+    const { delimiter, quote, onRow, rowEndings } = this;
+    const dLen = delimiter.length;
+    const d0 = delimiter[0];
+    // Every branch reads at most `lookahead` characters past i, so stopping
+    // that far from the end keeps each decision within the buffer.
+    const limit = final ? text.length : text.length - this.lookahead;
+    let { row, field, inQuotes, fieldStart } = this;
+    let i = 0;
+
+    while (i < limit) {
+      const ch = text[i];
+
+      if (inQuotes) {
+        if (ch === quote) {
+          if (text[i + 1] === quote) {
+            field += quote;
+            i += 2;
+          } else {
+            inQuotes = false;
+            i += 1;
+          }
+        } else {
+          // Everything up to the next quote is literal.
+          let j = text.indexOf(quote, i + 1);
+          if (j === -1 || j > limit) j = limit;
+          for (let k = text.indexOf('\n', i); k !== -1 && k < j; k = text.indexOf('\n', k + 1)) {
+            this.embeddedNewlines += 1;
+          }
+          field += text.slice(i, j);
+          i = j;
+        }
+        continue;
+      }
+
+      if (ch === quote && fieldStart) {
+        inQuotes = true;
+        this.hasQuotedFields = true;
+        fieldStart = false;
+        i += 1;
+        continue;
+      }
+
+      if (ch === d0 && (dLen === 1 || text.startsWith(delimiter, i))) {
+        row.push(field);
+        field = '';
+        fieldStart = true;
+        i += dLen;
+        continue;
+      }
+
+      if (ch === '\r' || ch === '\n') {
+        row.push(field);
+        onRow(row);
+        row = [];
+        field = '';
+        fieldStart = true;
+        if (ch === '\r' && text[i + 1] === '\n') {
+          rowEndings.crlf += 1;
+          i += 2;
+        } else {
+          if (ch === '\r') rowEndings.cr += 1;
+          else rowEndings.lf += 1;
+          i += 1;
+        }
+        continue;
+      }
+
+      // A run of ordinary characters: none of them can end the field or row.
+      let j = i + 1;
+      while (j < limit) {
+        const next = text[j];
+        if (next === d0 || next === '\r' || next === '\n') break;
+        j += 1;
+      }
+      field += text.slice(i, j);
+      fieldStart = false;
+      i = j;
+    }
+
+    this.carry = text.slice(i);
+    this.row = row;
+    this.field = field;
+    this.inQuotes = inQuotes;
+    this.fieldStart = fieldStart;
+  }
 }
 
 /**
@@ -47,74 +190,16 @@ export interface ParseResult {
  */
 export function parseDelimited(text: string, delimiter: string, quote = '"'): ParseResult {
   const rows: string[][] = [];
-  let row: string[] = [];
-  let field = '';
-  let inQuotes = false;
-  let fieldStart = true;
-  let hasQuotedFields = false;
-  let embeddedNewlines = 0;
-  let i = 0;
-
-  const dLen = delimiter.length;
-  const endField = () => {
-    row.push(field);
-    field = '';
-    fieldStart = true;
+  const parser = new DelimitedParser(delimiter, (row) => rows.push(row), quote);
+  parser.push(text);
+  parser.end();
+  return {
+    rows,
+    hasQuotedFields: parser.hasQuotedFields,
+    embeddedNewlines: parser.embeddedNewlines,
+    unterminatedQuote: parser.unterminatedQuote,
+    rowEndings: parser.rowEndings,
   };
-  const endRow = () => {
-    endField();
-    rows.push(row);
-    row = [];
-  };
-
-  while (i < text.length) {
-    const ch = text[i];
-
-    if (inQuotes) {
-      if (ch === quote) {
-        if (text[i + 1] === quote) {
-          field += quote;
-          i += 2;
-        } else {
-          inQuotes = false;
-          i += 1;
-        }
-      } else {
-        if (ch === '\n') embeddedNewlines += 1;
-        field += ch;
-        i += 1;
-      }
-      continue;
-    }
-
-    if (ch === quote && fieldStart) {
-      inQuotes = true;
-      hasQuotedFields = true;
-      fieldStart = false;
-      i += 1;
-      continue;
-    }
-
-    if (ch === delimiter[0] && (dLen === 1 || text.startsWith(delimiter, i))) {
-      endField();
-      i += dLen;
-      continue;
-    }
-
-    if (ch === '\r' || ch === '\n') {
-      endRow();
-      i += ch === '\r' && text[i + 1] === '\n' ? 2 : 1;
-      continue;
-    }
-
-    field += ch;
-    fieldStart = false;
-    i += 1;
-  }
-
-  if (inQuotes || field !== '' || row.length > 0) endRow();
-
-  return { rows, hasQuotedFields, embeddedNewlines, unterminatedQuote: inQuotes };
 }
 
 export interface DelimiterScore {

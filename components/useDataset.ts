@@ -1,14 +1,22 @@
 'use client';
 
-import { useDeferredValue, useMemo } from 'react';
-import { delimiterById, detectDelimiter, type DelimiterId, type DelimiterOption } from '@/lib/csv';
-import { analyze, type Analysis } from '@/lib/stats';
+import { useEffect, useMemo, useState } from 'react';
+import type { DelimiterId } from '@/lib/csv';
+import type { Analysis } from '@/lib/stats';
 import { inferSqlColumns, type SqlColumn } from '@/lib/sql';
 import { IDENTIFIER_CATEGORIES, scanForPhi, type PhiFinding } from '@/lib/phi';
 import type { EncodingId } from '@/lib/encoding';
+import type { DecodeInfo, ProfileResult } from '@/lib/profile';
+import { startProfile, type ProfileSource } from './profileClient';
 
-/** Parsing happens on the main thread, so very large pastes are clipped. */
-export const MAX_CHARS = 5_000_000;
+/**
+ * Opened files above this size are profiled from disk in the background and
+ * never loaded into the editor, which slows to a crawl on text this long.
+ */
+export const LARGE_FILE_BYTES = 5 * 1024 * 1024;
+
+/** Pause after the last keystroke before re-profiling pasted text. */
+const TYPING_DELAY_MS = 150;
 
 export interface Settings {
   delimiterId: DelimiterId;
@@ -31,38 +39,73 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export interface Dataset {
-  delimiter: DelimiterOption;
   analysis: Analysis | null;
   sqlColumns: SqlColumn[] | null;
   phi: PhiFinding[];
-  clipped: boolean;
+  /** A profile is running; `analysis` is the previous one until it finishes. */
+  pending: boolean;
+  /** 0..1 while pending. */
+  progress: number;
+  error: string | null;
+  /** For a large file: how it was decoded and its first lines. */
+  decoded?: DecodeInfo;
+  head?: string;
 }
 
-/** Parses and profiles one pasted dataset under the shared settings. */
-export function useDataset(text: string, settings: Settings): Dataset {
-  const deferred = useDeferredValue(text);
-  const clipped = deferred.length > MAX_CHARS;
-  const source = clipped ? deferred.slice(0, MAX_CHARS) : deferred;
+/**
+ * Profiles one dataset, pasted text or a large file, under the shared
+ * settings. The work runs in a background worker and is cancelled whenever
+ * its inputs change.
+ */
+export function useDataset(text: string, file: File | null, settings: Settings): Dataset {
+  const [result, setResult] = useState<ProfileResult | null>(null);
+  const [pending, setPending] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
-  const delimiter = useMemo(
-    () =>
-      settings.delimiterId === 'auto'
-        ? detectDelimiter(source)
-        : delimiterById(settings.delimiterId),
-    [settings.delimiterId, source],
-  );
+  const { delimiterId, hasHeader, trimFields, recognizeNullTokens } = settings;
+  // Encoding only matters when the worker decodes the bytes itself.
+  const encoding = file ? settings.encoding : 'auto';
 
-  const analysis = useMemo(
-    () =>
-      analyze(source, {
-        delimiter,
-        hasHeader: settings.hasHeader,
-        trimFields: settings.trimFields,
-        recognizeNullTokens: settings.recognizeNullTokens,
-      }),
-    [source, delimiter, settings.hasHeader, settings.trimFields, settings.recognizeNullTokens],
-  );
+  useEffect(() => {
+    if (!file && text.trim() === '') {
+      setResult(null);
+      setPending(false);
+      setError(null);
+      return;
+    }
+    const source: ProfileSource = file ? { kind: 'file', file } : { kind: 'text', text };
+    let job: ReturnType<typeof startProfile> | null = null;
+    setPending(true);
+    setProgress(0);
+    const timer = setTimeout(
+      () => {
+        job = startProfile(
+          source,
+          { delimiterId, hasHeader, trimFields, recognizeNullTokens, encoding },
+          setProgress,
+        );
+        job.promise.then(
+          (next) => {
+            setResult(next);
+            setError(null);
+            setPending(false);
+          },
+          (e: unknown) => {
+            setError(e instanceof Error ? e.message : String(e));
+            setPending(false);
+          },
+        );
+      },
+      file ? 0 : TYPING_DELAY_MS,
+    );
+    return () => {
+      clearTimeout(timer);
+      job?.cancel();
+    };
+  }, [text, file, delimiterId, hasHeader, trimFields, recognizeNullTokens, encoding]);
 
+  const analysis = result?.analysis ?? null;
   const phi = useMemo(() => (analysis ? scanForPhi(analysis) : []), [analysis]);
 
   // Columns the scan recognized as identifiers stay character-typed, however
@@ -83,5 +126,14 @@ export function useDataset(text: string, settings: Settings): Dataset {
     [analysis, settings.showSqlTypes, settings.staging, identifierColumns],
   );
 
-  return { delimiter, analysis, sqlColumns, phi, clipped };
+  return {
+    analysis,
+    sqlColumns,
+    phi,
+    pending,
+    progress,
+    error,
+    decoded: result?.decoded,
+    head: result?.head,
+  };
 }

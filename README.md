@@ -20,6 +20,10 @@ see [Desktop app](#desktop-app).
   **BCP log**, or **Generate sample data** from the openFDA drug directory.
 - Large paste area with a **Paste** button that reads the clipboard, or drag
   and drop / open a local file.
+- Parsing and profiling run in a background thread (a Web Worker), so the page
+  stays responsive. Files over 5 MB are not loaded into the editor at all: they
+  are read from disk in chunks, every row is profiled, and the editor shows the
+  first 200 lines read-only with a progress bar while the rest is read.
 - Opened files are decoded from their bytes, not assumed to be UTF-8. A
   byte-order mark wins; otherwise strict UTF-8 is tried and Windows-1252 is the
   fallback, with a notice saying so and a manual override. This matters: reading
@@ -501,22 +505,25 @@ components/
   Analyzer.tsx      client component: input, toolbar, state
   Panel.tsx         collapsible section with remembered state
   Menu.tsx          dropdown menu button
-  InputPanel.tsx    paste area, file opening and byte decoding
+  InputPanel.tsx    paste area, file opening, byte decoding and large files
   CompareView.tsx   schema and row reconciliation between two datasets
   GeneratorView.tsx openFDA search, sample shaping and output
   EfModelPanel.tsx  EF entity generation and its placeholders
   ContractView.tsx  contract input, findings and the column-by-column table
   ScriptBox.tsx     read-only generated file with copy and download
   CopyTable.tsx     copy-as-table and copy-as-Markdown buttons
-  useDataset.ts     parse, profile, SQL types and PHI scan for one dataset
+  useDataset.ts     background profile, SQL types and PHI scan for one dataset
+  profileClient.ts  starts and cancels the worker; main-thread fallback
   Overview.tsx      file-level tiles and data-quality notices
   FirstRecord.tsx   row 1 as key/value pairs
   ColumnStats.tsx   per-column profile table
   DataPreview.tsx   scrollable row preview
   SqlPanel.tsx      table name, generate button, read-only script boxes
 lib/
-  csv.ts            parser and delimiter detection
-  stats.ts          type inference and column profiling
+  csv.ts            incremental parser and delimiter detection
+  stats.ts          type inference and streaming column profiling
+  profile.ts        text and file profiling: sniffing, streamed decoding, progress
+  profile.worker.ts the background worker
   sql.ts            Azure SQL type inference and script generation
   encoding.ts       byte-order marks and encoding fallback
   phi.ts            PHI and personal-identifier heuristics
@@ -540,18 +547,25 @@ tests/
   efmodel.test.ts   type mapping, naming rules and rendered-shape tests
   contract.test.ts  parser and check tests, against a real landing model
   table.test.ts     Markdown, TSV and HTML table escaping
+  profile.test.ts   chunked parsing and profiling, estimates, streamed decoding
   fixtures/         a captured openFDA response, so tests need no network
 electron-builder.yml  desktop packaging targets
 ```
 
 ## Limits
 
-- Input over 5,000,000 characters is clipped, and the app says so.
+- Every row is profiled, however large the file. Counts, fill rates, types,
+  type mismatches, ranges, means, keys and duplicates are exact. Past these
+  caps, to bound memory, the profile switches to estimates and marks them:
+  distinct counts stop at 50,000 values per column (shown as `≥`, except for a
+  column that is still unique, whose count stays exact), the most common values
+  are counted over those 50,000 (`≈`), the median comes from a uniform sample of
+  100,000 numbers (`≈`), and duplicate detection tracks 2,000,000 distinct rows.
+- The first 20,000 rows are kept for the preview, PHI scan, NDC check, contract
+  check, comparison and `INSERT` script.
 - `INSERT` generation covers the first 5,000 data rows; past that the script
   stops being something you would paste by hand, and the app says how many rows
   were left out.
-- Column profiling covers the first 20,000 data rows; row and line counts still
-  reflect the whole input, and the app reports when profiling was capped.
-- Parsing is synchronous on the main thread. 100,000 rows (~4.4 MB) parse and
-  profile in roughly 350 ms; React's `useDeferredValue` keeps typing responsive
-  above that.
+- Throughput is roughly 8 MB of text per second: a 1,000,000-row, 106 MB claims
+  extract profiles in about 13 seconds and holds about 115 MB of memory. Where a
+  worker cannot start, the same code runs on the main thread.

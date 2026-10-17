@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { Analysis, ColumnProfile } from '@/lib/stats';
+import { DISTINCT_CAP, type Analysis, type ColumnProfile } from '@/lib/stats';
 import type { SqlColumn } from '@/lib/sql';
 import type { PhiFinding } from '@/lib/phi';
 import { formatInt, formatNumber, formatPercent } from '@/lib/format';
@@ -34,7 +34,19 @@ function central(col: ColumnProfile): string {
   if (!col.numeric) {
     return col.filled ? `avg len ${formatNumber(col.avgLength)}` : '—';
   }
-  return `mean ${formatNumber(col.numeric.mean)} · median ${formatNumber(col.numeric.median)}`;
+  const approx = col.approximate?.median ? '≈ ' : '';
+  return `mean ${formatNumber(col.numeric.mean)} · median ${approx}${formatNumber(col.numeric.median)}`;
+}
+
+/** Distinct count, marked as a lower bound past the tracking cap. */
+function distinct(col: ColumnProfile): string {
+  return col.approximate?.distinct ? `≥ ${formatInt(col.distinct)}` : formatInt(col.distinct);
+}
+
+function topValues(col: ColumnProfile): string {
+  if (!col.topValues.length) return '—';
+  const list = col.topValues.map((v) => `${v.value} (${v.count})`).join(', ');
+  return col.approximate?.topValues ? `≈ ${list}` : list;
 }
 
 /** The type cell, which expands to show values that do not fit the type. */
@@ -88,10 +100,10 @@ function columnsTable(
       col.nullToken > 0
         ? `${formatInt(col.missing)} (${formatInt(col.nullToken)} token)`
         : formatInt(col.missing),
-      formatInt(col.distinct),
+      distinct(col),
       range(col),
       central(col),
-      col.topValues.length ? col.topValues.map((v) => `${v.value} (${v.count})`).join(', ') : '—',
+      topValues(col),
     );
     return row;
   });
@@ -182,13 +194,19 @@ export function ColumnStats({
                       <span className="faint"> ({formatInt(col.nullToken)} token)</span>
                     ) : null}
                   </td>
-                  <td className="num">{formatInt(col.distinct)}</td>
+                  <td
+                    className="num"
+                    title={col.approximate?.distinct ? `At least this many; exact counts stop at ${formatInt(DISTINCT_CAP)} distinct values.` : undefined}
+                  >
+                    {distinct(col)}
+                  </td>
                   <td>{range(col)}</td>
                   <td>{central(col)}</td>
-                  <td className="top-values">
-                    {col.topValues.length
-                      ? col.topValues.map((v) => `${v.value} (${v.count})`).join(', ')
-                      : '—'}
+                  <td
+                    className="top-values"
+                    title={col.approximate?.topValues ? `Counted over the first ${formatInt(DISTINCT_CAP)} distinct values seen.` : undefined}
+                  >
+                    {topValues(col)}
                   </td>
                 </tr>,
                 isOpen ? (

@@ -1,4 +1,4 @@
-import type { Analysis } from '@/lib/stats';
+import { DUPLICATE_CAP, type Analysis } from '@/lib/stats';
 import type { PhiFinding } from '@/lib/phi';
 import type { TableData } from '@/lib/table';
 import { formatBytes, formatInt, formatPercent } from '@/lib/format';
@@ -130,7 +130,9 @@ export function Overview({
   if (analysis.truncated) {
     notices.push({
       tone: 'info',
-      text: `Profiling the first ${formatInt(analysis.dataRowCount)} of ${formatInt(analysis.totalDataRows)} data rows.`,
+      text:
+        `All ${formatInt(analysis.totalDataRows)} data rows were profiled. The preview, PHI scan, ` +
+        `NDC check, contract check, comparison and INSERT script use the first ${formatInt(analysis.rows.length)}.`,
     });
   }
   if (analysis.embeddedNewlines > 0) {
@@ -149,6 +151,12 @@ export function Overview({
         `${formatInt(analysis.duplicateGroups)} distinct value(s)` +
         (sample ? ` — the most repeated appears ${sample.count} times: ${sample.preview}` : '') +
         '.',
+    });
+  }
+  if (analysis.duplicatesCapped) {
+    notices.push({
+      tone: 'info',
+      text: `Duplicate detection tracked the first ${formatInt(DUPLICATE_CAP)} distinct rows; repeats of rows after that are not counted.`,
     });
   }
   if (analysis.candidateKeys.length === 0 && analysis.dataRowCount > 1) {
