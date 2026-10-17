@@ -2,10 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import {
+  buildLoadCommand,
   buildReimport,
+  canReimportSameTable,
   defaultReimportOptions,
   parseBcpLog,
   parseCommand,
+  sameTableReimportOptions,
   stripPrefix,
   tokenize,
 } from '../lib/bcp.ts';
@@ -206,4 +209,35 @@ test('carries terminators into the re-import of a character export', () => {
   const script = buildReimport(run, defaultReimportOptions(run.command));
   assert.match(script, /in "my file\.txt" .* -T -c -t \| -r \\n /);
   assert.equal(script.includes('format nul'), false, 'format file is suggested for native exports only');
+});
+
+test('loads back into the same table with the export’s parameters', () => {
+  const run = parseBcpLog(LOG).runs[0];
+  assert.ok(run.command);
+  assert.equal(canReimportSameTable(run.command), true);
+  const options = sameTableReimportOptions(run.command);
+  assert.equal(options.database, 'Prod');
+  assert.equal(options.batchSize, 50000);
+  assert.equal(
+    buildLoadCommand(run.command, options),
+    'bcp cqe.PatientMatch in ./Export/cqe.PatientMatch.bcp -S bilhinscripthaprod.database.windows.net -d Prod ' +
+      `-G -P ./134348797301441230.token -N -q -b50000 -m1 -h "TABLOCK" -e ${options.errorFile} -E -k`,
+  );
+  const script = buildReimport(run, options);
+  assert.match(script, /TRUNCATE TABLE cqe\.PatientMatch;/);
+  assert.equal(script.includes('format nul'), false, 'the table already exists');
+});
+
+test('same-table re-import keeps the login but not a literal password', () => {
+  const run = parseBcpLog('bcp dbo.T out t.dat -c -U loader -P s3cret -S srv -d Db -a 16384\n3 rows copied.').runs[0];
+  assert.ok(run.command);
+  const line = buildLoadCommand(run.command, sameTableReimportOptions(run.command));
+  assert.match(line, /^bcp dbo\.T in t\.dat -S srv -d Db -U loader -P <password> -c -a 16384 -b50000 /);
+  assert.equal(line.includes('s3cret'), false);
+});
+
+test('a queryout export has no table to load back into', () => {
+  const command = parseCommand('bcp "SELECT 1" queryout q.dat -c -T -S srv');
+  assert.ok(command);
+  assert.equal(canReimportSameTable(command), false);
 });

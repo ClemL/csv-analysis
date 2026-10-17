@@ -152,7 +152,13 @@ For each run:
   format and terminator switches and adds `-E -k -h "TABLOCK" -m1 -e`, a
   `format nul` command for native exports so the file survives a schema
   change, and the `COUNT_BIG` and `CHECKSUM_AGG` queries to verify the load.
-  Target server, database, table and options are editable.
+  Target server, database, table and options are editable. **Same table**
+  switches the script to load the file back into the table it was exported
+  from, with the export's server, database, authentication (the same `-G -P`
+  token file or `-U` login; a literal password becomes `<password>`), `-b`,
+  `-q`, `-a`, `-l` and `-K`, plus a `TRUNCATE TABLE` reminder since bcp in
+  appends. The Command panel's **Copy bcp in (same table)** button copies that
+  load command in one click. Not offered for `queryout`, which has no table.
 
 The log is parsed locally like everything else. Behavior notes follow
 Microsoft Learn's [bcp utility](https://learn.microsoft.com/en-us/sql/tools/bcp-utility)
