@@ -664,6 +664,16 @@ export interface ReimportOptions {
   keepIdentity: boolean;
   keepNulls: boolean;
   maxErrors: number;
+  /**
+   * Load back into the table the export came from, on the same server and
+   * database, with the export's own connection and authentication switches.
+   */
+  sameTable: boolean;
+}
+
+/** True when the run exported a table or view that a bcp in can load back into. */
+export function canReimportSameTable(command: BcpCommand): boolean {
+  return command.direction === 'out';
 }
 
 export function defaultReimportOptions(command: BcpCommand): ReimportOptions {
@@ -678,6 +688,19 @@ export function defaultReimportOptions(command: BcpCommand): ReimportOptions {
     keepIdentity: true,
     keepNulls: true,
     maxErrors: 1,
+    sameTable: false,
+  };
+}
+
+/** Options that load the file back into the exported table with the export's parameters. */
+export function sameTableReimportOptions(command: BcpCommand): ReimportOptions {
+  return {
+    ...defaultReimportOptions(command),
+    server: command.server ?? 'yourserver.database.windows.net',
+    database: command.database ?? '',
+    table: command.object,
+    batchSize: command.batchSize ?? 50000,
+    sameTable: true,
   };
 }
 
@@ -708,13 +731,49 @@ function authArgs(command: BcpCommand): string[] {
   }
 }
 
+/**
+ * The export's own authentication switches, values included: the same token
+ * file and login. A literal password is never repeated.
+ */
+function sameAuthArgs(command: BcpCommand): string[] {
+  const args: string[] = [];
+  for (const f of command.flags) {
+    if (['-G', '-T', '-D'].includes(f.flag)) args.push(f.flag);
+    if (f.flag === '-U' && f.value !== undefined) args.push('-U', quoteArg(f.value));
+    if (f.flag === '-P') args.push('-P', command.tokenFile ? quoteArg(command.tokenFile) : '<password>');
+  }
+  return args.length > 0 ? args : authArgs(command);
+}
+
+/** Connection switches that do not change the data: packet size, login timeout, intent. */
+function sameConnectionArgs(command: BcpCommand): string[] {
+  const args: string[] = [];
+  for (const f of command.flags)
+    if (['-a', '-l', '-K'].includes(f.flag) && f.value !== undefined) args.push(f.flag, quoteArg(f.value));
+  return args;
+}
+
+/** The single bcp in command line for an export run. */
+export function buildLoadCommand(command: BcpCommand, options: ReimportOptions): string {
+  const auth = options.sameTable ? sameAuthArgs(command) : authArgs(command);
+  const load = ['bcp', quoteArg(options.table), 'in', quoteArg(options.dataFile), '-S', quoteArg(options.server)];
+  if (options.database) load.push('-d', quoteArg(options.database));
+  load.push(...auth, ...formatArgs(command));
+  if (options.sameTable) load.push(...sameConnectionArgs(command));
+  if (command.flags.some((f) => f.flag === '-q')) load.push('-q');
+  load.push(`-b${options.batchSize}`, `-m${options.maxErrors}`, '-h', '"TABLOCK"', '-e', quoteArg(options.errorFile));
+  if (options.keepIdentity) load.push('-E');
+  if (options.keepNulls) load.push('-k');
+  return load.join(' ');
+}
+
 /** A bcp in command, a format-file command and verification SQL for an export run. */
 export function buildReimport(run: BcpRun, options: ReimportOptions): string {
   const command = run.command;
   if (!command) return '';
+  if (options.sameTable) return buildSameTableReimport(run, command, options);
   const fmt = formatArgs(command);
   const auth = authArgs(command);
-  const conn = ['-S', quoteArg(options.server), '-d', quoteArg(options.database), ...auth];
   const lines: string[] = [];
 
   lines.push('# 1. Recreate the table in the target first, from the source DDL (SSMS: Script Table as > CREATE To).');
@@ -733,17 +792,29 @@ export function buildReimport(run: BcpRun, options: ReimportOptions): string {
   }
 
   lines.push('# 2. Load the file.');
-  const load = ['bcp', quoteArg(options.table), 'in', quoteArg(options.dataFile), ...conn, ...fmt];
-  if (command.flags.some((f) => f.flag === '-q')) load.push('-q');
-  load.push(`-b${options.batchSize}`, `-m${options.maxErrors}`, '-h', '"TABLOCK"', '-e', quoteArg(options.errorFile));
-  if (options.keepIdentity) load.push('-E');
-  if (options.keepNulls) load.push('-k');
-  lines.push(load.join(' '));
+  lines.push(buildLoadCommand(command, options));
   lines.push('');
 
   lines.push('# 3. Verify in the target, then run the same checksum against the source and compare.');
   lines.push(`#    SELECT COUNT_BIG(*) AS RowCnt FROM ${options.table};   -- expect ${run.rowsCopied ?? '?'}`);
   lines.push(`#    SELECT CHECKSUM_AGG(BINARY_CHECKSUM(*)) FROM ${options.table};`);
   lines.push('#    The error file should be 0 bytes.');
+  return lines.join('\n');
+}
+
+function buildSameTableReimport(run: BcpRun, command: BcpCommand, options: ReimportOptions): string {
+  const lines: string[] = [];
+  lines.push(`# Loads ${options.dataFile} back into ${options.table}, with the export's connection, authentication and format switches.`);
+  lines.push('# 1. bcp in appends. To replace the rows rather than duplicate them, empty the table first:');
+  lines.push(`#    TRUNCATE TABLE ${options.table};   -- or DELETE, if foreign keys reference it`);
+  if (command.tokenFile)
+    lines.push(`#    ${command.tokenFile} must hold a current access token; the export's token has likely expired.`);
+  if (command.auth === 'sql') lines.push('#    Replace <password>; the export\'s password is not repeated here.');
+  lines.push('');
+  lines.push('# 2. Load the file.');
+  lines.push(buildLoadCommand(command, options));
+  lines.push('');
+  lines.push('# 3. Verify, then check the error file is 0 bytes.');
+  lines.push(`#    SELECT COUNT_BIG(*) AS RowCnt FROM ${options.table};   -- expect ${run.rowsCopied ?? '?'} after a TRUNCATE`);
   return lines.join('\n');
 }

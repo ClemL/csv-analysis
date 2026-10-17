@@ -2,10 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  buildLoadCommand,
   buildReimport,
+  canReimportSameTable,
   defaultReimportOptions,
   formatLabel,
   parseBcpLog,
+  sameTableReimportOptions,
   type BcpRun,
   type BcpRunStatus,
   type ReimportOptions,
@@ -13,7 +16,7 @@ import {
 import { decodeBytes } from '@/lib/encoding';
 import { formatInt, formatNumber } from '@/lib/format';
 import { Panel } from './Panel';
-import { ScriptBox } from './ScriptBox';
+import { CopyButton, ScriptBox } from './ScriptBox';
 
 const PLACEHOLDER = `Paste bcp console output, with or without the pipeline's log prefixes.
 
@@ -339,7 +342,19 @@ function RunDetail({ run, title }: { run: BcpRun; title: string }) {
       ) : null}
 
       {command ? (
-        <Panel id="bcp-command" title="Command" meta={`${formatInt(command.flags.length)} options`}>
+        <Panel
+          id="bcp-command"
+          title="Command"
+          meta={`${formatInt(command.flags.length)} options`}
+          actions={
+            canReimportSameTable(command) ? (
+              <CopyButton
+                label="Copy bcp in (same table)"
+                text={buildLoadCommand(command, sameTableReimportOptions(command))}
+              />
+            ) : null
+          }
+        >
           <div className="panel-body">
             <code className="bcp-raw">{command.raw}</code>
           </div>
@@ -374,6 +389,7 @@ function RunDetail({ run, title }: { run: BcpRun; title: string }) {
 function ReimportPanel({ run }: { run: BcpRun }) {
   const command = run.command!;
   const [options, setOptions] = useState<ReimportOptions>(() => defaultReimportOptions(command));
+  const sameTableAllowed = canReimportSameTable(command);
   const set = <K extends keyof ReimportOptions>(key: K, value: ReimportOptions[K]) =>
     setOptions((prev) => ({ ...prev, [key]: value }));
   const script = useMemo(() => buildReimport(run, options), [run, options]);
@@ -386,8 +402,33 @@ function ReimportPanel({ run }: { run: BcpRun }) {
   );
 
   return (
-    <Panel id="bcp-reimport" title="Re-import" meta="bcp in for this export" defaultOpen={false}>
+    <Panel
+      id="bcp-reimport"
+      title="Re-import"
+      meta={options.sameTable ? 'bcp in, same table and parameters' : 'bcp in for this export'}
+      defaultOpen={false}
+    >
       <div className="toolbar ef-toolbar">
+          <div className="segmented" role="group" aria-label="Re-import target">
+            <button
+              type="button"
+              aria-pressed={!options.sameTable}
+              className={options.sameTable ? undefined : 'active'}
+              onClick={() => setOptions(defaultReimportOptions(command))}
+            >
+              New table
+            </button>
+            <button
+              type="button"
+              aria-pressed={options.sameTable}
+              className={options.sameTable ? 'active' : undefined}
+              disabled={!sameTableAllowed}
+              title={sameTableAllowed ? undefined : 'A queryout export has no source table to load back into.'}
+              onClick={() => setOptions(sameTableReimportOptions(command))}
+            >
+              Same table
+            </button>
+          </div>
           {text('server', 'Target server')}
           {text('database', 'Target database')}
           {text('table', 'Target table')}
