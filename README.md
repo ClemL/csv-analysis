@@ -416,6 +416,40 @@ if you are running the script through a driver such as `SqlClient`. The
 `DROP TABLE` guard is emitted commented out — a generated script tends to get
 pasted into whichever connection happens to be open.
 
+
+## Load command
+
+Below the SQL script, a **Load command** section writes the command that loads
+the file into the table: a `bcp … in` command line, or a `BULK INSERT`
+statement. The table name is shared with the SQL script section, and an opened
+file's name fills in the data file.
+
+The tool is recommended from the file. bcp has no notion of quoting: a quoted
+value keeps its quotes, and a delimiter or line break inside quotes splits the
+row. So a file with quoted fields gets `BULK INSERT … WITH (FORMAT = 'CSV',
+FIELDQUOTE = '"')` (SQL Server 2017 and later, and Azure SQL), and an unquoted
+one gets bcp. Either can be chosen by hand.
+
+- **Terminators** come from the detected delimiter and line endings. `\n`
+  means CRLF to both tools, so a file with LF-only rows gets `0x0a`. Terminators
+  are always quoted on the bcp command line, because `,` `;` and `|` mean
+  something to cmd or PowerShell.
+- **Header**: `-F 2` / `FIRSTROW = 2` when the first line is a header.
+- **Encoding**: UTF-8 (`-C 65001` / `CODEPAGE = '65001'`), Windows-1252, or
+  UTF-16 (`-w` / `DATAFILETYPE = 'widechar'`).
+- **bcp sign-in**: Entra ID (`-G`), Windows (`-T`) or a SQL login (`-U`). The
+  password is never put on the command line; bcp prompts for it.
+- **BULK INSERT source**: Azure Blob Storage, with the one-time master key,
+  SAS credential and external data source written out as comments, or a path
+  on the SQL Server machine.
+- Batch size, max errors, an error file, `KEEPNULLS` and `TABLOCK`.
+
+Notes above the command say what will go wrong first: quoting under bcp,
+ragged rows, an unclosed quote, mixed CRLF/LF endings, `NULL`/`NA` tokens that
+load as text, numbers written with `$` or thousands separators that will not
+convert, m/d/y dates that depend on the login's language, that fields map by
+position, and the permissions BULK INSERT needs.
+
 ## Running locally
 
 ```bash
@@ -431,6 +465,9 @@ npm start          # serve the production build
 npm test           # unit tests for the parser and profiler (node:test)
 npm run typecheck  # tsc --noEmit
 ```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the typecheck, the tests, the
+web build and the desktop static export on every push and pull request.
 
 ## Deploying to Vercel
 
@@ -548,6 +585,7 @@ components/
   DataPreview.tsx   scrollable row preview
   SqlPanel.tsx      table name, generate button, read-only script boxes
   NdcPanel.tsx      NDC forms per column, issues and the T-SQL fix
+  LoadPanel.tsx     bcp / BULK INSERT options, notes and the command
 lib/
   csv.ts            incremental parser and delimiter detection
   stats.ts          type inference and streaming column profiling
@@ -557,6 +595,7 @@ lib/
   encoding.ts       byte-order marks and encoding fallback
   phi.ts            PHI and personal-identifier heuristics
   ndccheck.ts       NDC layouts, 11-digit conversion and column reports
+  load.ts           bcp and BULK INSERT commands for loading the file
   diff.ts           comparison of two datasets
   ndc.ts            openFDA client and sample-file generators
   efmodel.ts        CLR type mapping, property naming and entity rendering
@@ -573,6 +612,7 @@ tests/
   encoding.test.ts  decoding and fallback tests
   phi.test.ts       identifier-detection tests, including false positives
   ndccheck.test.ts  NDC classification, conversion and column reports
+  load.test.ts      load commands, terminators and notes
   diff.test.ts      comparison tests
   ndc.test.ts       URL building and generator tests, against a fixture
   efmodel.test.ts   type mapping, naming rules and rendered-shape tests

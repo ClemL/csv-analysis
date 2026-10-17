@@ -12,6 +12,7 @@ import { FirstRecord } from './FirstRecord';
 import { ColumnStats } from './ColumnStats';
 import { DataPreview } from './DataPreview';
 import { NdcPanel } from './NdcPanel';
+import { LoadPanel } from './LoadPanel';
 import { SqlPanel } from './SqlPanel';
 import { EfModelPanel } from './EfModelPanel';
 import { CompareView } from './CompareView';
@@ -37,6 +38,8 @@ export function Analyzer() {
   const [fileA, setFileA] = useState<File | null>(null);
   const [fileB, setFileB] = useState<File | null>(null);
   const [maskPhi, setMaskPhi] = useState(true);
+  const [nameA, setNameA] = useState<string | null>(null);
+  const [tableName, setTableName] = useState('dbo.ImportedData');
 
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) =>
     setSettings((prev) => ({ ...prev, [key]: value }));
@@ -54,6 +57,7 @@ export function Analyzer() {
       setTextB(text);
     } else {
       setFileA(null);
+      setNameA(null);
       setTextA(text);
     }
     setMode(target === 'analyze' ? 'analyze' : 'compare');
@@ -216,6 +220,7 @@ export function Analyzer() {
             file={fileA}
             onFile={setFileA}
             status={a}
+            onName={setNameA}
             encoding={settings.encoding}
             footer={toolbar}
           />
@@ -260,10 +265,18 @@ export function Analyzer() {
                     columns={a.sqlColumns}
                     staging={settings.staging}
                     onStagingChange={(value) => set('staging', value)}
+                    tableName={tableName}
+                    onTableNameChange={setTableName}
                   />
                   <EfModelPanel columns={a.sqlColumns} />
                 </>
               ) : null}
+              <LoadPanel
+                analysis={a.analysis}
+                table={tableName}
+                hasHeader={settings.hasHeader}
+                fileName={nameA}
+              />
               <DataPreview analysis={a.analysis} maskColumns={maskColumns} />
             </>
           ) : (

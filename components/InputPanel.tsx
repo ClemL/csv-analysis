@@ -34,6 +34,7 @@ export function InputPanel({
   file,
   onFile,
   status,
+  onName,
   encoding,
   compact = false,
   footer,
@@ -46,6 +47,8 @@ export function InputPanel({
   file: File | null;
   onFile: (file: File | null) => void;
   status: InputStatus;
+  /** The opened file's name, or null once the input is pasted, typed or cleared. */
+  onName?: (name: string | null) => void;
   encoding: EncodingId;
   /** Shorter textarea, for the side-by-side compare layout. */
   compact?: boolean;
@@ -71,6 +74,7 @@ export function InputPanel({
   }, [bytes, encoding]);
 
   const openFile = (opened: File) => {
+    onName?.(opened.name);
     if (opened.size > LARGE_FILE_BYTES) {
       setBytes(null);
       setDecoded(undefined);
@@ -86,6 +90,7 @@ export function InputPanel({
     setBytes(null);
     setDecoded(undefined);
     onFile(null);
+    onName?.(null);
     onText('');
   };
 
@@ -98,6 +103,7 @@ export function InputPanel({
       setBytes(null);
       setDecoded(undefined);
       onFile(null);
+      onName?.(null);
       onText(value);
     } catch {
       // Permission denied or no clipboard API: point the user at Ctrl+V instead.

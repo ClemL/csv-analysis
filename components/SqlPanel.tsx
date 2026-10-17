@@ -12,13 +12,17 @@ export function SqlPanel({
   columns,
   staging,
   onStagingChange,
+  tableName,
+  onTableNameChange,
 }: {
   analysis: Analysis;
   columns: SqlColumn[];
   staging: boolean;
   onStagingChange: (value: boolean) => void;
+  /** Shared with the load command, so both target the same table. */
+  tableName: string;
+  onTableNameChange: (value: string) => void;
 }) {
-  const [tableName, setTableName] = useState('dbo.ImportedData');
   const [script, setScript] = useState<SqlScript | null>(null);
 
   // The script is a snapshot: drop it whenever the data or target table moves.
@@ -52,7 +56,7 @@ export function SqlPanel({
               type="text"
               value={tableName}
               spellCheck={false}
-              onChange={(e) => setTableName(e.target.value)}
+              onChange={(e) => onTableNameChange(e.target.value)}
               placeholder="dbo.ImportedData"
             />
           </label>
