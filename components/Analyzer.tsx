@@ -11,6 +11,7 @@ import { CopyTable } from './CopyTable';
 import { FirstRecord } from './FirstRecord';
 import { ColumnStats } from './ColumnStats';
 import { DataPreview } from './DataPreview';
+import { NdcPanel } from './NdcPanel';
 import { SqlPanel } from './SqlPanel';
 import { EfModelPanel } from './EfModelPanel';
 import { CompareView } from './CompareView';
@@ -229,6 +230,13 @@ export function Analyzer() {
                 sqlColumns={a.sqlColumns ?? undefined}
                 phi={a.phi}
               />
+              {a.ndc.length > 0 ? (
+                <NdcPanel
+                  reports={a.ndc}
+                  rowsChecked={a.analysis.rows.length}
+                  truncated={a.analysis.truncated}
+                />
+              ) : null}
               {a.sqlColumns ? (
                 <>
                   <SqlPanel

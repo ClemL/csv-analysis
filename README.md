@@ -101,6 +101,26 @@ value patterns are both used, and the rules are written to avoid false positives
 - **A postal code alone is not identifying**, only in company with something
   else.
 
+**NDC check** — a column named like an NDC (`ndc`, `ndc11`, `package_ndc`,
+`national_drug_code`), or one where at least 80% of values have the hyphenated
+NDC shape, gets an NDC panel. Each value is classified as 11 digits, 5-4-2,
+one of the 10-digit layouts (4-4-2, 5-3-2, 5-4-1), 10 bare digits, a
+labeler-product code with no package segment, 6–9 digits (leading zeros
+dropped by a spreadsheet or a numeric column), a spreadsheet number
+(`9.37147E+07`, `93714656.0`), or not an NDC. The panel reports:
+
+- **Leading zeros lost** and **converted to numbers**, with examples. Scientific
+  notation has already lost digits and cannot be repaired.
+- **10 digits, no hyphens**: these cannot be converted reliably, because the
+  layout that says which segment to pad is gone.
+- **Mixed formats**: 10- and 11-digit, or hyphenated and bare, in one column,
+  which makes joins miss rows.
+- A T-SQL `CASE` expression that converts every recoverable form to the
+  11-digit 5-4-2 form, and returns `NULL` where the layout cannot be known.
+
+NDC columns are also kept character-typed in the generated SQL and EF model,
+so a numeric-looking NDC never lands in an integer column.
+
 **Data-quality warnings**
 
 - Rows whose field count differs from the header (with line numbers).
@@ -519,6 +539,7 @@ components/
   ColumnStats.tsx   per-column profile table
   DataPreview.tsx   scrollable row preview
   SqlPanel.tsx      table name, generate button, read-only script boxes
+  NdcPanel.tsx      NDC forms per column, issues and the T-SQL fix
 lib/
   csv.ts            incremental parser and delimiter detection
   stats.ts          type inference and streaming column profiling
@@ -527,6 +548,7 @@ lib/
   sql.ts            Azure SQL type inference and script generation
   encoding.ts       byte-order marks and encoding fallback
   phi.ts            PHI and personal-identifier heuristics
+  ndccheck.ts       NDC layouts, 11-digit conversion and column reports
   diff.ts           comparison of two datasets
   ndc.ts            openFDA client and sample-file generators
   efmodel.ts        CLR type mapping, property naming and entity rendering
@@ -542,6 +564,7 @@ tests/
   sql.test.ts       SQL inference and script generation tests
   encoding.test.ts  decoding and fallback tests
   phi.test.ts       identifier-detection tests, including false positives
+  ndccheck.test.ts  NDC classification, conversion and column reports
   diff.test.ts      comparison tests
   ndc.test.ts       URL building and generator tests, against a fixture
   efmodel.test.ts   type mapping, naming rules and rendered-shape tests

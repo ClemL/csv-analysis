@@ -1054,3 +1054,24 @@ td.wrap {
 .profile-status .bar {
   width: 140px;
 }
+
+.ndc-body {
+  display: grid;
+  gap: 22px;
+}
+
+.ndc-column {
+  display: grid;
+  gap: 10px;
+}
+
+.ndc-column h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ndc-column h3 .faint {
+  font-weight: 400;
+  font-size: 12.5px;
+}

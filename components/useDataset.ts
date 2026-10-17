@@ -5,6 +5,7 @@ import type { DelimiterId } from '@/lib/csv';
 import type { Analysis } from '@/lib/stats';
 import { inferSqlColumns, type SqlColumn } from '@/lib/sql';
 import { IDENTIFIER_CATEGORIES, scanForPhi, type PhiFinding } from '@/lib/phi';
+import { scanForNdc, type NdcColumnReport } from '@/lib/ndccheck';
 import type { EncodingId } from '@/lib/encoding';
 import type { DecodeInfo, ProfileResult } from '@/lib/profile';
 import { startProfile, type ProfileSource } from './profileClient';
@@ -42,6 +43,7 @@ export interface Dataset {
   analysis: Analysis | null;
   sqlColumns: SqlColumn[] | null;
   phi: PhiFinding[];
+  ndc: NdcColumnReport[];
   /** A profile is running; `analysis` is the previous one until it finishes. */
   pending: boolean;
   /** 0..1 while pending. */
@@ -108,14 +110,17 @@ export function useDataset(text: string, file: File | null, settings: Settings):
   const analysis = result?.analysis ?? null;
   const phi = useMemo(() => (analysis ? scanForPhi(analysis) : []), [analysis]);
 
-  // Columns the scan recognized as identifiers stay character-typed, however
-  // numeric they look.
+  const ndc = useMemo(() => (analysis ? scanForNdc(analysis) : []), [analysis]);
+
+  // Columns recognized as identifiers stay character-typed, however numeric
+  // they look: an NDC in an integer column loses its leading zeros.
   const identifierColumns = useMemo(
     () =>
-      new Set(
-        phi.filter((f) => IDENTIFIER_CATEGORIES.has(f.category)).map((f) => f.columnIndex),
-      ),
-    [phi],
+      new Set([
+        ...phi.filter((f) => IDENTIFIER_CATEGORIES.has(f.category)).map((f) => f.columnIndex),
+        ...ndc.map((r) => r.columnIndex),
+      ]),
+    [phi, ndc],
   );
 
   const sqlColumns = useMemo(
@@ -130,6 +135,7 @@ export function useDataset(text: string, file: File | null, settings: Settings):
     analysis,
     sqlColumns,
     phi,
+    ndc,
     pending,
     progress,
     error,
