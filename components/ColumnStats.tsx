@@ -3,11 +3,13 @@
 import { useState } from 'react';
 import { DISTINCT_CAP, type Analysis, type ColumnProfile } from '@/lib/stats';
 import type { SqlColumn } from '@/lib/sql';
-import type { PhiFinding } from '@/lib/phi';
+import { maskValue, type PhiFinding } from '@/lib/phi';
 import { formatInt, formatNumber, formatPercent } from '@/lib/format';
 import type { TableData } from '@/lib/table';
 import { Panel } from './Panel';
 import { CopyTable } from './CopyTable';
+
+const NO_COLUMNS: ReadonlySet<number> = new Set();
 
 function FillBar({ rate }: { rate: number }) {
   const tone = rate === 0 ? 'empty' : rate < 0.9 ? 'low' : '';
@@ -21,21 +23,24 @@ function FillBar({ rate }: { rate: number }) {
   );
 }
 
-function range(col: ColumnProfile): string {
+/** `mask` hides the values a range or median shows; lengths and means stay. */
+function range(col: ColumnProfile, mask = false): string {
+  const m = (v: string) => (mask ? maskValue(v) : v);
   if (col.numeric) {
-    return `${formatNumber(col.numeric.min)} … ${formatNumber(col.numeric.max)}`;
+    return `${m(formatNumber(col.numeric.min))} … ${m(formatNumber(col.numeric.max))}`;
   }
-  if (col.dateRange) return `${col.dateRange.min} … ${col.dateRange.max}`;
+  if (col.dateRange) return `${m(col.dateRange.min)} … ${m(col.dateRange.max)}`;
   if (col.filled === 0) return '—';
   return `${col.minLength}–${col.maxLength} chars`;
 }
 
-function central(col: ColumnProfile): string {
+function central(col: ColumnProfile, mask = false): string {
   if (!col.numeric) {
     return col.filled ? `avg len ${formatNumber(col.avgLength)}` : '—';
   }
   const approx = col.approximate?.median ? '≈ ' : '';
-  return `mean ${formatNumber(col.numeric.mean)} · median ${approx}${formatNumber(col.numeric.median)}`;
+  const median = formatNumber(col.numeric.median);
+  return `mean ${formatNumber(col.numeric.mean)} · median ${approx}${mask ? maskValue(median) : median}`;
 }
 
 /** Distinct count, marked as a lower bound past the tracking cap. */
@@ -43,9 +48,11 @@ function distinct(col: ColumnProfile): string {
   return col.approximate?.distinct ? `≥ ${formatInt(col.distinct)}` : formatInt(col.distinct);
 }
 
-function topValues(col: ColumnProfile): string {
+function topValues(col: ColumnProfile, mask = false): string {
   if (!col.topValues.length) return '—';
-  const list = col.topValues.map((v) => `${v.value} (${v.count})`).join(', ');
+  const list = col.topValues
+    .map((v) => `${mask ? maskValue(v.value) : v.value} (${v.count})`)
+    .join(', ');
   return col.approximate?.topValues ? `≈ ${list}` : list;
 }
 
@@ -74,11 +81,15 @@ function TypeCell({
   );
 }
 
-/** The columns table as plain text cells, matching the on-screen columns. */
+/**
+ * The columns table as plain text cells, matching the on-screen columns.
+ * Values from columns in `mask` are masked; lengths and counts are kept.
+ */
 function columnsTable(
   analysis: Analysis,
   sqlColumns: SqlColumn[] | undefined,
   phiByColumn: Map<number, PhiFinding>,
+  mask: ReadonlySet<number>,
 ): TableData {
   const headers = ['#', 'Name', 'Type'];
   if (sqlColumns) headers.push('SQL type');
@@ -95,15 +106,16 @@ function columnsTable(
       col.mismatchCount ? `${col.type} (${formatInt(col.mismatchCount)} off)` : col.type,
     ];
     if (sqlColumns) row.push(sql ? `${sql.type} ${sql.nullable ? 'NULL' : 'NOT NULL'}` : '');
+    const masked = mask.has(col.index);
     row.push(
       formatPercent(col.fillRate),
       col.nullToken > 0
         ? `${formatInt(col.missing)} (${formatInt(col.nullToken)} token)`
         : formatInt(col.missing),
       distinct(col),
-      range(col),
-      central(col),
-      topValues(col),
+      range(col, masked),
+      central(col, masked),
+      topValues(col, masked),
     );
     return row;
   });
@@ -115,11 +127,14 @@ export function ColumnStats({
   analysis,
   sqlColumns,
   phi = [],
+  maskColumns = NO_COLUMNS,
 }: {
   analysis: Analysis;
   /** Present only while the SQL types setting is on. */
   sqlColumns?: SqlColumn[];
   phi?: PhiFinding[];
+  /** Columns whose values are masked when copied. */
+  maskColumns?: ReadonlySet<number>;
 }) {
   const [expanded, setExpanded] = useState<number | null>(null);
   const phiByColumn = new Map(phi.map((f) => [f.columnIndex, f]));
@@ -132,7 +147,12 @@ export function ColumnStats({
       meta={`${formatInt(analysis.columnCount)} columns over ${formatInt(
         analysis.dataRowCount,
       )} profiled rows`}
-      actions={<CopyTable getData={() => columnsTable(analysis, sqlColumns, phiByColumn)} />}
+      actions={
+        <CopyTable
+          getData={() => columnsTable(analysis, sqlColumns, phiByColumn, maskColumns)}
+          title={maskColumns.size ? 'Values in flagged PHI columns are masked' : undefined}
+        />
+      }
     >
       <div className="scroll">
         <table>

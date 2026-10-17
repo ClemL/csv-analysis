@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { DELIMITERS, type DelimiterId } from '@/lib/csv';
 import { ENCODINGS, type EncodingId } from '@/lib/encoding';
 import { DEFAULT_SETTINGS, useDataset, type Settings } from './useDataset';
@@ -36,12 +36,17 @@ export function Analyzer() {
   const [textB, setTextB] = useState('');
   const [fileA, setFileA] = useState<File | null>(null);
   const [fileB, setFileB] = useState<File | null>(null);
+  const [maskPhi, setMaskPhi] = useState(true);
 
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) =>
     setSettings((prev) => ({ ...prev, [key]: value }));
 
   const a = useDataset(textA, fileA, settings);
   const b = useDataset(textB, fileB, settings);
+  const maskColumns = useMemo(
+    () => new Set(maskPhi ? a.phi.map((f) => f.columnIndex) : []),
+    [maskPhi, a.phi],
+  );
 
   const useGenerated = (target: 'analyze' | 'a' | 'b', text: string) => {
     if (target === 'b') {
@@ -121,6 +126,16 @@ export function Analyzer() {
         />
         SQL types (Azure SQL)
       </label>
+
+      {mode === 'analyze' && a.phi.length > 0 ? (
+        <label
+          className="field"
+          title="Copy buttons replace letters with x and digits with # in the columns flagged as possible PHI. What is shown on screen is unchanged."
+        >
+          <input type="checkbox" checked={maskPhi} onChange={(e) => setMaskPhi(e.target.checked)} />
+          Mask PHI when copying
+        </label>
+      ) : null}
     </div>
   );
 
@@ -224,11 +239,12 @@ export function Analyzer() {
                   phi={a.phi}
                 />
               </Panel>
-              <FirstRecord analysis={a.analysis} />
+              <FirstRecord analysis={a.analysis} maskColumns={maskColumns} />
               <ColumnStats
                 analysis={a.analysis}
                 sqlColumns={a.sqlColumns ?? undefined}
                 phi={a.phi}
+                maskColumns={maskColumns}
               />
               {a.ndc.length > 0 ? (
                 <NdcPanel
@@ -248,7 +264,7 @@ export function Analyzer() {
                   <EfModelPanel columns={a.sqlColumns} />
                 </>
               ) : null}
-              <DataPreview analysis={a.analysis} />
+              <DataPreview analysis={a.analysis} maskColumns={maskColumns} />
             </>
           ) : (
             <section className="panel">

@@ -210,3 +210,19 @@ export function scanForPhi(analysis: Analysis): PhiFinding[] {
   const identifying = findings.filter((f) => f.category !== 'postal-code');
   return identifying.length > 0 ? findings : [];
 }
+
+/**
+ * Masks a value for copying out: letters become `x` and digits `#`, while
+ * punctuation and length are kept. The shape survives, which is usually what
+ * a pasted example is for (`###-##-####`, `xxxx@xxxxx.xxx`), but the value does
+ * not.
+ */
+export function maskValue(value: string): string {
+  return value.replace(/\p{L}/gu, 'x').replace(/\p{N}/gu, '#');
+}
+
+/** Copies rows with the cells in `columns` masked. */
+export function maskRows(rows: string[][], columns: ReadonlySet<number>): string[][] {
+  if (columns.size === 0) return rows;
+  return rows.map((row) => row.map((cell, i) => (columns.has(i) ? maskValue(cell) : cell)));
+}

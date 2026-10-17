@@ -101,6 +101,14 @@ value patterns are both used, and the rules are written to avoid false positives
 - **A postal code alone is not identifying**, only in company with something
   else.
 
+**Masking PHI when copying** — when columns are flagged, a **Mask PHI when
+copying** setting appears in the toolbar, on by default. The Columns, Preview
+and First record copy buttons then replace letters with `x` and digits with `#`
+in the flagged columns (`123-45-6789` becomes `###-##-####`), including the
+most common values, numeric and date ranges, and medians. Counts, lengths and
+the screen itself are unchanged. The generated SQL is not masked, since loading
+the real values is its purpose.
+
 **NDC check** — a column named like an NDC (`ndc`, `ndc11`, `package_ndc`,
 `national_drug_code`), or one where at least 80% of values have the hyphenated
 NDC shape, gets an NDC panel. Each value is classified as 11 digits, 5-4-2,

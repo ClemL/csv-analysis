@@ -28,15 +28,18 @@ function CopyFormatButton({
   format,
   label,
   getData,
+  title,
 }: {
   format: Format;
   label: string;
   getData: () => TableData;
+  title?: string;
 }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
       type="button"
+      title={title}
       onClick={async () => {
         try {
           const data = getData();
@@ -60,16 +63,21 @@ export function CopyTable({
   tableLabel = 'Copy as table',
   mdLabel = 'Copy as MD',
   showTable = true,
+  title,
 }: {
   getData: () => TableData;
   tableLabel?: string;
   mdLabel?: string;
   showTable?: boolean;
+  /** Tooltip on both buttons. */
+  title?: string;
 }) {
   return (
     <>
-      {showTable ? <CopyFormatButton format="table" label={tableLabel} getData={getData} /> : null}
-      <CopyFormatButton format="md" label={mdLabel} getData={getData} />
+      {showTable ? (
+        <CopyFormatButton format="table" label={tableLabel} getData={getData} title={title} />
+      ) : null}
+      <CopyFormatButton format="md" label={mdLabel} getData={getData} title={title} />
     </>
   );
 }
