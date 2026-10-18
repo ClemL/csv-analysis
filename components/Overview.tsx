@@ -2,16 +2,7 @@ import { DUPLICATE_CAP, type Analysis } from '@/lib/stats';
 import type { PhiFinding } from '@/lib/phi';
 import type { TableData } from '@/lib/table';
 import { formatBytes, formatInt, formatPercent } from '@/lib/format';
-
-function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="tile">
-      <div className="label">{label}</div>
-      <div className="value">{value}</div>
-      {hint ? <div className="hint">{hint}</div> : null}
-    </div>
-  );
-}
+import { CopyTable } from './CopyTable';
 
 interface TileData {
   label: string;
@@ -88,16 +79,24 @@ export function overviewTable(analysis: Analysis, autoDetected: boolean): TableD
   };
 }
 
-export function Overview({
-  analysis,
-  autoDetected,
-  phi,
-}: {
-  analysis: Analysis;
-  autoDetected: boolean;
-  phi: PhiFinding[];
-}) {
-  const notices: { tone: 'info' | 'warn' | 'bad'; text: string }[] = [];
+export interface OverviewNotice {
+  tone: 'info' | 'warn' | 'bad' | 'phi';
+  /** A lead-in shown in bold. */
+  title?: string;
+  text: string;
+}
+
+/** File-level data-quality notices, most important first. */
+export function overviewNotices(analysis: Analysis, phi: PhiFinding[]): OverviewNotice[] {
+  const notices: OverviewNotice[] = [];
+
+  if (phi.length > 0) {
+    notices.push({
+      tone: 'phi',
+      title: 'Possible PHI or personal data.',
+      text: `These columns look identifying: ${phi.map((f) => `${f.columnName} (${f.label.toLowerCase()})`).join(', ')}. This page parses in your browser and sends nothing anywhere, but treat the generated SQL and anything you copy out of here accordingly.`,
+    });
+  }
 
   if (analysis.unterminatedQuote) {
     notices.push({
@@ -173,7 +172,7 @@ export function Overview({
       text:
         `${withMismatches.length} column(s) contain values that do not fit their type: ` +
         `${withMismatches.map((c) => `${c.name} (${formatInt(c.mismatchCount)})`).join(', ')}. ` +
-        'Expand the type in the columns table to see them.',
+        'Select a column to see them in the inspector.',
     });
   }
 
@@ -185,36 +184,83 @@ export function Overview({
     });
   }
 
-  return (
-    <>
-      {phi.length > 0 ? (
-        <div className="panel-body" style={{ paddingBottom: 0 }}>
-          <div className="notice phi">
-            <strong>Possible PHI or personal data.</strong> These columns look identifying:{' '}
-            {phi.map((f) => `${f.columnName} (${f.label.toLowerCase()})`).join(', ')}. This page
-            parses in your browser and sends nothing anywhere, but treat the generated SQL and
-            anything you copy out of here accordingly.
-          </div>
-        </div>
-      ) : null}
+  if (analysis.emptyRows > 0) {
+    notices.push({
+      tone: 'info',
+      text: `${formatInt(analysis.emptyRows)} blank line(s) were skipped before profiling.`,
+    });
+  }
+  return notices;
+}
 
-      <div className="tiles">
-        {overviewTiles(analysis, autoDetected).map((t) => (
-          <Tile key={t.label} label={t.label} value={t.value} hint={t.hint} />
+/** The Workbench overview: five headline figures, then the notices. */
+export function OverviewStrip({
+  analysis,
+  autoDetected,
+  phi,
+}: {
+  analysis: Analysis;
+  autoDetected: boolean;
+  phi: PhiFinding[];
+}) {
+  const keys = analysis.candidateKeys.length;
+  const kpis = [
+    {
+      label: 'Rows',
+      value: formatInt(analysis.totalDataRows),
+      hint: `${formatInt(analysis.lineCount)} physical lines`,
+    },
+    {
+      label: 'Columns',
+      value: formatInt(analysis.columnCount),
+      hint: keys ? `${keys} candidate key${keys === 1 ? '' : 's'}` : 'no natural key',
+    },
+    {
+      label: 'Null / empty',
+      value: analysis.totalCells ? formatPercent(analysis.missingCells / analysis.totalCells) : '—',
+      hint: `${formatInt(analysis.missingCells)} cells`,
+    },
+    {
+      label: 'Duplicates',
+      value: formatInt(analysis.duplicateRows),
+      hint: analysis.duplicateRows
+        ? `${formatInt(analysis.duplicateGroups)} repeated row(s)`
+        : 'every row distinct',
+    },
+    {
+      label: 'Size',
+      value: formatBytes(analysis.byteCount),
+      hint: `${formatInt(analysis.charCount)} characters`,
+    },
+  ];
+  const notices = overviewNotices(analysis, phi);
+
+  return (
+    <section aria-label="Overview">
+      <div className="wb-section-head">
+        <span className="wb-label">Overview</span>
+        <span className="spacer" />
+        <CopyTable getData={() => overviewTable(analysis, autoDetected)} />
+      </div>
+      <div className="wb-kpis">
+        {kpis.map((k) => (
+          <div className="wb-kpi" key={k.label}>
+            <div className="wb-label">{k.label}</div>
+            <div className="value">{k.value}</div>
+            <div className="hint">{k.hint}</div>
+          </div>
         ))}
       </div>
-
       {notices.length > 0 ? (
-        <div className="panel-body">
-          <div className="notices">
-            {notices.map((n, i) => (
-              <div key={i} className={`notice ${n.tone}`}>
-                {n.text}
-              </div>
-            ))}
-          </div>
+        <div className="wb-notices">
+          {notices.map((n, i) => (
+            <div key={i} className={`notice ${n.tone}`}>
+              {n.title ? <strong>{n.title} </strong> : null}
+              {n.text}
+            </div>
+          ))}
         </div>
       ) : null}
-    </>
+    </section>
   );
 }

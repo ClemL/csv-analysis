@@ -3,11 +3,20 @@
 import { useCallback, useState } from 'react';
 import { formatInt } from '@/lib/format';
 
-export function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) {
+export function CopyButton({
+  text,
+  label = 'Copy',
+  className,
+}: {
+  text: string;
+  label?: string;
+  className?: string;
+}) {
   const [copied, setCopied] = useState(false);
   return (
     <button
       type="button"
+      className={className}
       disabled={!text}
       onClick={async () => {
         try {

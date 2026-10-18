@@ -13,6 +13,29 @@ see [Desktop app](#desktop-app).
 
 ## Features
 
+**Layout** — a dark, dense "workbench" laid out like a code editor:
+
+- A **top bar** with the file's name and shape (size, encoding, delimiter, line
+  endings, quoting) and a **jump box** (Ctrl K) that goes straight to a column,
+  an output tab or a mode by name.
+- A **left rail** with the five modes and, in Analyze, a **checks** summary:
+  NDC, load, type mismatches, PHI columns, duplicate rows and field counts, each
+  with a count. Selecting a check opens the column or tab it is about.
+- In Analyze, the **columns table** in the middle and an **inspector** on the
+  right for the selected column: fill, distinct count, nulls, lengths, range and
+  center, the values that do not fit its type, its NDC forms and fixes, its most
+  common values, and why its SQL type was chosen. Click a row, or move with the
+  arrow keys from a column's name. Below the table, **output tabs** hold the load
+  command, the preview, the SQL script, the EF model and the first record; every
+  tab stays loaded, so options and generated scripts survive switching.
+- A **status bar** with what the profiler is doing and how long it took, the
+  PHI masking switch, and the file's format.
+- Severity is shown by shape as well as color everywhere: a triangle blocks the
+  load, a ring needs review, a square is clean or informational. IBM Plex Sans
+  and JetBrains Mono are bundled at build time, so the desktop app needs no
+  network for them. On a phone the rail becomes one scrolling row and the
+  inspector moves below the table.
+
 **Input**
 
 - Five modes: **Analyze** one file, **Compare two files** side by side,
@@ -29,10 +52,11 @@ see [Desktop app](#desktop-app).
   fallback, with a notice saying so and a manual override. This matters: reading
   a Windows-1252 extract as UTF-8 turns `Café` into `Caf<?>` and carries the
   corruption into the generated SQL.
-- Every section collapses from its header, and the open/closed state is
-  remembered per browser via `localStorage`. Parse settings sit outside the
-  Input section's collapse, since they change what every other section reports.
-  The Input section is pinned open while there is nothing to analyze.
+- The Input panel (and the panels in the other modes) collapses from its
+  header, and the open/closed state is remembered per browser via
+  `localStorage`. Parse settings sit outside the Input panel's collapse, since
+  they change what every other section reports. The Input panel is pinned open
+  while there is nothing to analyze.
 
 **Delimiters**
 
@@ -57,12 +81,13 @@ see [Desktop app](#desktop-app).
 | Scope | Reported |
 | --- | --- |
 | File | Detected delimiter, data rows, physical lines, columns, total cells, populated cells, null/empty cells, character count, byte size, whether quoting was used, blank lines skipped |
-| Record | Row 1 rendered as key/value pairs, copyable as JSON |
+| Record | Row 1 rendered as key/value pairs, copyable as JSON (First record tab) |
 | Column | Inferred type, fill rate, null/empty count (split into blanks and null tokens), distinct count, min/max range, mean / median for numerics, min/max/avg length for text, date range, five most common values, whether it can serve as a key, and the values that do not fit its type |
-| Preview | First 50 data rows in a scrollable table, with empty and whitespace-only cells marked |
+| Preview | First 50 data rows in a scrollable table, with empty and whitespace-only cells marked (Preview tab) |
 
 **Copying results** — Overview and Columns each have **Copy as table** and
-**Copy as MD**; Preview has **Copy top 3 as MD**. *Copy as table* puts an HTML
+**Copy as MD**, which carry every statistic, not just the columns on screen;
+the Preview tab has **Copy top 3 as MD**. *Copy as table* puts an HTML
 table and a tab-separated version on the clipboard together, so Outlook, Word
 and Teams paste a formatted table and Excel pastes cells. *Copy as MD* writes a
 GitHub-flavored Markdown table, with `|` escaped and in-cell newlines as `<br>`.
@@ -102,7 +127,7 @@ value patterns are both used, and the rules are written to avoid false positives
   else.
 
 **Masking PHI when copying** — when columns are flagged, a **Mask PHI when
-copying** setting appears in the toolbar, on by default. The Columns, Preview
+copying** setting appears in the toolbar and the status bar, on by default. The Columns, Preview
 and First record copy buttons then replace letters with `x` and digits with `#`
 in the flagged columns (`123-45-6789` becomes `###-##-####`), including the
 most common values, numeric and date ranges, and medians. Counts, lengths and
@@ -111,11 +136,12 @@ the real values is its purpose.
 
 **NDC check** — a column named like an NDC (`ndc`, `ndc11`, `package_ndc`,
 `national_drug_code`), or one where at least 80% of values have the hyphenated
-NDC shape, gets an NDC panel. Each value is classified as 11 digits, 5-4-2,
+NDC shape, is flagged `NDC` in the columns table, and the inspector shows its
+forms as a stacked bar with counts. Each value is classified as 11 digits, 5-4-2,
 one of the 10-digit layouts (4-4-2, 5-3-2, 5-4-1), 10 bare digits, a
 labeler-product code with no package segment, 6–9 digits (leading zeros
 dropped by a spreadsheet or a numeric column), a spreadsheet number
-(`9.37147E+07`, `93714656.0`), or not an NDC. The panel reports:
+(`9.37147E+07`, `93714656.0`), or not an NDC. The inspector reports:
 
 - **Leading zeros lost** and **converted to numbers**, with examples. Scientific
   notation has already lost digits and cannot be repaired.
@@ -123,8 +149,9 @@ dropped by a spreadsheet or a numeric column), a spreadsheet number
   layout that says which segment to pad is gone.
 - **Mixed formats**: 10- and 11-digit, or hyphenated and bare, in one column,
   which makes joins miss rows.
-- A T-SQL `CASE` expression that converts every recoverable form to the
-  11-digit 5-4-2 form, and returns `NULL` where the layout cannot be known.
+- **Copy T-SQL to normalize**: a T-SQL `CASE` expression that converts every
+  recoverable form to the 11-digit 5-4-2 form, and returns `NULL` where the
+  layout cannot be known.
 
 NDC columns are also kept character-typed in the generated SQL and EF model,
 so a numeric-looking NDC never lands in an integer column.
@@ -281,9 +308,9 @@ reported as a parser warning rather than failing the whole contract.
 
 ## EF model generation
 
-Alongside the SQL script, an **EF model (C#)** section builds a landing-row
-entity in the same shape as the hand-written ones. The section is collapsed by
-default and generates nothing until **Generate** is pressed, so it stays out of
+Beside the SQL script, the **EF model** tab builds a landing-row
+entity in the same shape as the hand-written ones. It generates nothing until
+**Generate** is pressed, so it stays out of
 the way when you only came to look at the data. The result is a snapshot:
 changing an option or the file clears it, and the button reads **Generate**
 again, so what is on screen always matches what produced it. It emits: a `partial class` deriving
@@ -359,7 +386,7 @@ two sources.
 ## SQL script generation
 
 With the "SQL types (Azure SQL)" setting on, the column table gains a **SQL type**
-column (hover a cell for the reasoning), and a **SQL script** panel appears. Enter
+column (the inspector says why each type was chosen), and a **SQL script** tab appears. Enter
 a target table — `dbo.ImportedData` by default, schema-qualified names accepted —
 and press **Generate** to fill two read-only boxes: a `CREATE TABLE` sized to the
 inferred types, and `INSERT` statements carrying every row. Both can be copied or
@@ -419,9 +446,9 @@ pasted into whichever connection happens to be open.
 
 ## Load command
 
-Below the SQL script, a **Load command** section writes the command that loads
+The **Load command** tab, the first of the output tabs, writes the command that loads
 the file into the table: a `bcp … in` command line, or a `BULK INSERT`
-statement. The table name is shared with the SQL script section, and an opened
+statement. The table name is shared with the SQL script tab, and an opened
 file's name fills in the data file.
 
 The tool is recommended from the file. bcp has no notion of quoting: a quoted
@@ -562,13 +589,16 @@ heaviest: about 120 MB per artifact, almost all of it Chromium.
 
 ```
 app/
-  layout.tsx        root layout and metadata
+  layout.tsx        root layout, metadata and the bundled fonts
   page.tsx          server component shell
-  globals.css       all styling (light and dark, no CSS framework)
+  globals.css       all styling (the dark workbench theme, no CSS framework)
   icon.svg          favicon
 components/
-  Analyzer.tsx      client component: input, toolbar, state
-  Panel.tsx         collapsible section with remembered state
+  Analyzer.tsx      client component: state, modes, and the workbench layout
+  Shell.tsx         top bar and jump box, left rail, status bar
+  checks.ts         the rail's checks summary
+  Inspector.tsx     everything about the selected column
+  Panel.tsx         collapsible section with remembered state; plain inside a tab
   Menu.tsx          dropdown menu button
   InputPanel.tsx    paste area, file opening, byte decoding and large files
   CompareView.tsx   schema and row reconciliation between two datasets
@@ -579,12 +609,11 @@ components/
   CopyTable.tsx     copy-as-table and copy-as-Markdown buttons
   useDataset.ts     background profile, SQL types and PHI scan for one dataset
   profileClient.ts  starts and cancels the worker; main-thread fallback
-  Overview.tsx      file-level tiles and data-quality notices
+  Overview.tsx      headline figures and data-quality notices
   FirstRecord.tsx   row 1 as key/value pairs
-  ColumnStats.tsx   per-column profile table
+  ColumnStats.tsx   selectable columns table with flags
   DataPreview.tsx   scrollable row preview
   SqlPanel.tsx      table name, generate button, read-only script boxes
-  NdcPanel.tsx      NDC forms per column, issues and the T-SQL fix
   LoadPanel.tsx     bcp / BULK INSERT options, notes and the command
 lib/
   csv.ts            incremental parser and delimiter detection

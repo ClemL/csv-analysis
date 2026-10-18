@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 const STORAGE_KEY = 'csvInspector.panels';
 
@@ -20,6 +20,12 @@ function writeState(id: string, open: boolean): void {
     // Private browsing or blocked storage: collapse state is per-session only.
   }
 }
+
+/**
+ * Inside an output tab a panel is already labelled by the tab, so it drops
+ * its card, title and collapse toggle and keeps its toolbar and body.
+ */
+export const PanelEmbedded = createContext(false);
 
 function Chevron() {
   return (
@@ -60,8 +66,9 @@ export function Panel({
   children,
   ...dragHandlers
 }: PanelProps) {
+  const embedded = useContext(PanelEmbedded);
   const [stored, setStored] = useState(defaultOpen);
-  const open = forceOpen || stored;
+  const open = embedded || forceOpen || stored;
 
   // Read after mount: the page is prerendered, so touching storage during
   // render would desync the server and client markup.
@@ -78,6 +85,22 @@ export function Panel({
   };
 
   const bodyId = `panel-${id}`;
+
+  if (embedded) {
+    return (
+      <section className={`panel embedded${className ? ` ${className}` : ''}`} {...dragHandlers}>
+        {meta || actions ? (
+          <div className="panel-head">
+            {meta ? <span className="panel-meta">{meta}</span> : null}
+            <span className="spacer" />
+            {actions}
+          </div>
+        ) : null}
+        <div id={bodyId}>{children}</div>
+        {footer}
+      </section>
+    );
+  }
 
   return (
     <section className={`panel${open ? '' : ' collapsed'}${className ? ` ${className}` : ''}`} {...dragHandlers}>
