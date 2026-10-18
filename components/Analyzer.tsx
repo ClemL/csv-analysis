@@ -1,17 +1,18 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DELIMITERS, type DelimiterId } from '@/lib/csv';
-import { ENCODINGS, type EncodingId } from '@/lib/encoding';
+import { ENCODINGS, encodingLabel, type EncodingId } from '@/lib/encoding';
+import { formatBytes } from '@/lib/format';
+import { formattedNumberColumns, lineEnding, type LineEnding } from '@/lib/load';
 import { DEFAULT_SETTINGS, useDataset, type Settings } from './useDataset';
 import { InputPanel } from './InputPanel';
-import { Panel } from './Panel';
-import { Overview, overviewTable } from './Overview';
-import { CopyTable } from './CopyTable';
+import { PanelEmbedded } from './Panel';
+import { OverviewStrip } from './Overview';
 import { FirstRecord } from './FirstRecord';
 import { ColumnStats } from './ColumnStats';
+import { Inspector } from './Inspector';
 import { DataPreview } from './DataPreview';
-import { NdcPanel } from './NdcPanel';
 import { LoadPanel } from './LoadPanel';
 import { SqlPanel } from './SqlPanel';
 import { EfModelPanel } from './EfModelPanel';
@@ -19,15 +20,32 @@ import { CompareView } from './CompareView';
 import { GeneratorView } from './GeneratorView';
 import { ContractView } from './ContractView';
 import { BcpView } from './BcpView';
+import { MODE_LABELS, Rail, StatusBar, TopBar, type JumpTarget, type Mode } from './Shell';
+import { computeChecks, type Check, type OutputTab } from './checks';
 
-type Mode = 'analyze' | 'compare' | 'contract' | 'bcp' | 'generate';
+const INTROS: Partial<Record<Mode, string>> = {
+  compare:
+    'Both sides are parsed with the same settings. Rows are matched on a column that is unique in both.',
+  contract:
+    'Check the file against an EF landing model or a CREATE TABLE before you try to load it.',
+  bcp: "Read bcp's console output: what it copied, which files it wrote, what went wrong, and how to load the file back.",
+  generate: 'Real drug records from the openFDA NDC directory, shaped into a delimited file.',
+};
 
-const MODE_LABELS: Record<Mode, string> = {
-  analyze: 'Analyze',
-  compare: 'Compare two files',
-  contract: 'Contract check',
-  bcp: 'BCP log',
-  generate: 'Generate sample data',
+const TAB_LABELS: Record<OutputTab, string> = {
+  load: 'Load command',
+  preview: 'Preview',
+  sql: 'SQL script',
+  ef: 'EF model',
+  record: 'First record',
+};
+
+const ENDING_LABELS: Record<LineEnding, string> = {
+  crlf: 'CRLF',
+  lf: 'LF',
+  cr: 'CR',
+  mixed: 'mixed line endings',
+  none: 'single line',
 };
 
 export function Analyzer() {
@@ -39,17 +57,51 @@ export function Analyzer() {
   const [fileB, setFileB] = useState<File | null>(null);
   const [maskPhi, setMaskPhi] = useState(true);
   const [nameA, setNameA] = useState<string | null>(null);
+  const [encodingA, setEncodingA] = useState<string | null>(null);
   const [tableName, setTableName] = useState('dbo.ImportedData');
+  const [selected, setSelected] = useState(0);
+  const [tab, setTab] = useState<OutputTab>('load');
 
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) =>
     setSettings((prev) => ({ ...prev, [key]: value }));
 
   const a = useDataset(textA, fileA, settings);
   const b = useDataset(textB, fileB, settings);
+  const analysis = a.analysis;
+
   const maskColumns = useMemo(
     () => new Set(maskPhi ? a.phi.map((f) => f.columnIndex) : []),
     [maskPhi, a.phi],
   );
+  const formatted = useMemo(
+    () => new Set(analysis ? formattedNumberColumns(analysis) : []),
+    [analysis],
+  );
+  const checks = useMemo(
+    () => (analysis ? computeChecks(analysis, a.phi, a.ndc, settings.hasHeader) : null),
+    [analysis, a.phi, a.ndc, settings.hasHeader],
+  );
+
+  // A different set of columns starts the inspector at the top again.
+  const headerKey = analysis?.headers.join('\u0000') ?? '';
+  useEffect(() => setSelected(0), [headerKey]);
+  const column = analysis ? Math.min(selected, analysis.columnCount - 1) : 0;
+
+  const tabs = (Object.keys(TAB_LABELS) as OutputTab[]).filter(
+    (t) => a.sqlColumns || (t !== 'sql' && t !== 'ef'),
+  );
+  const activeTab = tabs.includes(tab) ? tab : 'load';
+
+  const showTab = (next: OutputTab) => {
+    setMode('analyze');
+    setTab(next);
+    document.getElementById('wb-output')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const onCheck = (check: Check) => {
+    if (check.column !== undefined) setSelected(check.column);
+    else if (check.tab) showTab(check.tab);
+  };
 
   const useGenerated = (target: 'analyze' | 'a' | 'b', text: string) => {
     if (target === 'b') {
@@ -58,10 +110,77 @@ export function Analyzer() {
     } else {
       setFileA(null);
       setNameA(null);
+      setEncodingA(null);
       setTextA(text);
     }
     setMode(target === 'analyze' ? 'analyze' : 'compare');
   };
+
+  // ------------------------------------------------------------ top bar
+
+  const showsA = mode === 'analyze' || mode === 'contract';
+  const fileLabel = showsA ? (fileA?.name ?? nameA ?? (textA.trim() ? 'pasted text' : null)) : null;
+  const encoding = fileA ? (a.decoded ? encodingLabel(a.decoded.encoding) : null) : encodingA;
+  const chips =
+    showsA && analysis
+      ? [
+          formatBytes(analysis.byteCount),
+          ...(encoding ? [encoding] : []),
+          `${analysis.delimiter.display} ${analysis.delimiter.label.toLowerCase()}`,
+          ENDING_LABELS[lineEnding(analysis)],
+          ...(analysis.hasQuotedFields ? ['quoted'] : []),
+        ]
+      : [];
+
+  const targets: JumpTarget[] = [
+    ...(analysis ? analysis.headers.map((h) => ({ value: h, hint: 'column' })) : []),
+    ...tabs.map((t) => ({ value: TAB_LABELS[t], hint: 'tab' })),
+    ...(Object.keys(MODE_LABELS) as Mode[]).map((m) => ({ value: MODE_LABELS[m], hint: 'mode' })),
+  ];
+
+  const onJump = (value: string): boolean => {
+    if (!value) return false;
+    const lower = value.toLowerCase();
+    if (analysis) {
+      let index = analysis.headers.indexOf(value);
+      if (index === -1) {
+        const loose = analysis.headers.filter((h) => h.toLowerCase().startsWith(lower));
+        if (loose.length === 1) index = analysis.headers.indexOf(loose[0]);
+      }
+      if (index !== -1) {
+        setMode('analyze');
+        setSelected(index);
+        return true;
+      }
+    }
+    const t = tabs.find((id) => TAB_LABELS[id].toLowerCase() === lower);
+    if (t && analysis) {
+      showTab(t);
+      return true;
+    }
+    const m = (Object.keys(MODE_LABELS) as Mode[]).find((id) => MODE_LABELS[id].toLowerCase() === lower);
+    if (m) {
+      setMode(m);
+      return true;
+    }
+    return false;
+  };
+
+  // ------------------------------------------------------------ status bar
+
+  const busy = mode === 'compare' ? a.pending || b.pending : showsA && a.pending;
+  const statusData = showsA || mode === 'compare' ? a : null;
+  const format =
+    showsA && analysis
+      ? [
+          ...(encoding ? [encoding] : []),
+          ENDING_LABELS[lineEnding(analysis)],
+          analysis.delimiter.label.toLowerCase(),
+          settings.hasHeader ? 'header row' : 'no header',
+        ]
+      : [];
+
+  // ------------------------------------------------------------ shared pieces
 
   const toolbar = (
     <div className="toolbar">
@@ -143,192 +262,204 @@ export function Analyzer() {
     </div>
   );
 
-  return (
-    <>
-      <div className="modebar">
-        <div className="segmented" role="tablist" aria-label="Mode">
-          {(Object.keys(MODE_LABELS) as Mode[]).map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="tab"
-              aria-selected={mode === value}
-              className={mode === value ? 'active' : undefined}
-              onClick={() => setMode(value)}
-            >
-              {MODE_LABELS[value]}
-            </button>
-          ))}
+  const inputA = (id: string, title: string, compact: boolean, footer?: React.ReactNode) => (
+    <InputPanel
+      id={id}
+      title={title}
+      text={textA}
+      onText={setTextA}
+      file={fileA}
+      onFile={setFileA}
+      status={a}
+      onName={setNameA}
+      onEncoding={setEncodingA}
+      encoding={settings.encoding}
+      compact={compact}
+      footer={footer}
+    />
+  );
+
+  // ------------------------------------------------------------ main content
+
+  let main: React.ReactNode;
+  if (mode === 'bcp') {
+    main = <BcpView />;
+  } else if (mode === 'generate') {
+    main = <GeneratorView onUse={useGenerated} />;
+  } else if (mode === 'contract') {
+    main = <ContractView analysis={analysis} dataInput={inputA('input', 'Data file', true, toolbar)} />;
+  } else if (mode === 'compare') {
+    main = (
+      <>
+        <div className="compare-inputs">
+          {inputA('input-a', 'A', true)}
+          <InputPanel
+            id="input-b"
+            title="B"
+            text={textB}
+            onText={setTextB}
+            file={fileB}
+            onFile={setFileB}
+            status={b}
+            encoding={settings.encoding}
+            compact
+          />
         </div>
-        {mode === 'compare' ? (
-          <span className="modebar-hint">
-            Both sides are parsed with the same settings. Rows are matched on a column that is
-            unique in both.
-          </span>
-        ) : null}
-        {mode === 'generate' ? (
-          <span className="modebar-hint">
-            Real drug records from the openFDA NDC directory, shaped into a delimited file.
-          </span>
-        ) : null}
-        {mode === 'bcp' ? (
-          <span className="modebar-hint">
-            Read bcp's console output: what it copied, which files it wrote, what went wrong, and
-            how to load the file back.
-          </span>
-        ) : null}
-        {mode === 'contract' ? (
-          <span className="modebar-hint">
-            Check the file against an EF landing model or a CREATE TABLE before you try to load it.
-          </span>
+        <section className="panel">{toolbar}</section>
+        {a.analysis && b.analysis ? (
+          <CompareView a={a.analysis} b={b.analysis} />
+        ) : (
+          <section className="panel">
+            <div className="empty-state">
+              Paste a file into both A and B to compare their schema, column distributions and rows.
+            </div>
+          </section>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <div className="wb">
+      <TopBar file={fileLabel} chips={chips} targets={targets} onJump={onJump} />
+
+      <div className="wb-body">
+        <Rail
+          mode={mode}
+          onMode={setMode}
+          checks={mode === 'analyze' ? checks : null}
+          onCheck={onCheck}
+        />
+
+        <main className="wb-main">
+          {mode !== 'analyze' ? (
+            <div className="wb-pad">
+              {INTROS[mode] ? <p className="wb-intro">{INTROS[mode]}</p> : null}
+              {main}
+            </div>
+          ) : (
+            <>
+              <div className="wb-pad">{inputA('input', 'Input', false, toolbar)}</div>
+              {analysis ? (
+                <>
+                  <OverviewStrip
+                    analysis={analysis}
+                    autoDetected={settings.delimiterId === 'auto'}
+                    phi={a.phi}
+                  />
+                  <ColumnStats
+                    analysis={analysis}
+                    sqlColumns={a.sqlColumns ?? undefined}
+                    phi={a.phi}
+                    ndc={a.ndc}
+                    formatted={formatted}
+                    maskColumns={maskColumns}
+                    selected={column}
+                    onSelect={setSelected}
+                  />
+                  <section className="wb-output" id="wb-output" aria-label="Output">
+                    <div className="wb-tabs" role="tablist" aria-label="Output">
+                      {tabs.map((t, i) => (
+                        <button
+                          key={t}
+                          type="button"
+                          role="tab"
+                          id={`wb-tab-${t}`}
+                          className="wb-tab"
+                          aria-selected={activeTab === t}
+                          aria-controls={`wb-tabpanel-${t}`}
+                          tabIndex={activeTab === t ? 0 : -1}
+                          onClick={() => setTab(t)}
+                          onKeyDown={(e) => {
+                            const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+                            if (!step) return;
+                            e.preventDefault();
+                            const next = tabs[(i + step + tabs.length) % tabs.length];
+                            setTab(next);
+                            document.getElementById(`wb-tab-${next}`)?.focus();
+                          }}
+                        >
+                          {TAB_LABELS[t]}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Every tab stays mounted, so options and generated scripts survive switching. */}
+                    <PanelEmbedded.Provider value={true}>
+                      <div role="tabpanel" id="wb-tabpanel-load" aria-labelledby="wb-tab-load" hidden={activeTab !== 'load'}>
+                        <LoadPanel
+                          analysis={analysis}
+                          table={tableName}
+                          hasHeader={settings.hasHeader}
+                          fileName={fileA?.name ?? nameA}
+                        />
+                      </div>
+                      <div role="tabpanel" id="wb-tabpanel-preview" aria-labelledby="wb-tab-preview" hidden={activeTab !== 'preview'}>
+                        <DataPreview analysis={analysis} maskColumns={maskColumns} />
+                      </div>
+                      {a.sqlColumns ? (
+                        <>
+                          <div role="tabpanel" id="wb-tabpanel-sql" aria-labelledby="wb-tab-sql" hidden={activeTab !== 'sql'}>
+                            <SqlPanel
+                              analysis={analysis}
+                              columns={a.sqlColumns}
+                              staging={settings.staging}
+                              onStagingChange={(value) => set('staging', value)}
+                              tableName={tableName}
+                              onTableNameChange={setTableName}
+                            />
+                          </div>
+                          <div role="tabpanel" id="wb-tabpanel-ef" aria-labelledby="wb-tab-ef" hidden={activeTab !== 'ef'}>
+                            <EfModelPanel columns={a.sqlColumns} />
+                          </div>
+                        </>
+                      ) : null}
+                      <div role="tabpanel" id="wb-tabpanel-record" aria-labelledby="wb-tab-record" hidden={activeTab !== 'record'}>
+                        <FirstRecord analysis={analysis} maskColumns={maskColumns} />
+                      </div>
+                    </PanelEmbedded.Provider>
+                  </section>
+                </>
+              ) : (
+                <div className="wb-empty">
+                  {a.pending ? (
+                    <p>Profiling…</p>
+                  ) : (
+                    <>
+                      <p>Paste delimited text above, or open or drop a file, to see its structure, column types and statistics.</p>
+                      <p>
+                        The first line is treated as a header unless you turn that off. Quoted fields follow
+                        RFC 4180 rules. Nothing is uploaded; parsing runs entirely in your browser.
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </main>
+
+        {mode === 'analyze' && analysis ? (
+          <Inspector
+            analysis={analysis}
+            index={column}
+            sqlColumn={a.sqlColumns?.[column]}
+            phi={a.phi.find((f) => f.columnIndex === column)}
+            ndc={a.ndc.find((r) => r.columnIndex === column)}
+            formatted={formatted.has(column)}
+            masked={maskColumns.has(column)}
+          />
         ) : null}
       </div>
 
-      {mode === 'bcp' ? (
-        <BcpView />
-      ) : mode === 'generate' ? (
-        <GeneratorView onUse={useGenerated} />
-      ) : mode === 'contract' ? (
-        <>
-          <ContractView
-            analysis={a.analysis}
-            dataInput={
-              <>
-                <InputPanel
-                  id="input"
-                  title="Data file"
-                  text={textA}
-                  onText={setTextA}
-                  file={fileA}
-                  onFile={setFileA}
-                  status={a}
-                  encoding={settings.encoding}
-                  compact
-                  footer={toolbar}
-                />
-              </>
-            }
-          />
-        </>
-      ) : mode === 'analyze' ? (
-        <>
-          <InputPanel
-            id="input"
-            title="Input"
-            text={textA}
-            onText={setTextA}
-            file={fileA}
-            onFile={setFileA}
-            status={a}
-            onName={setNameA}
-            encoding={settings.encoding}
-            footer={toolbar}
-          />
-
-          {a.analysis ? (
-            <>
-              <Panel
-                id="overview"
-                title="Overview"
-                actions={
-                  <CopyTable
-                    getData={() =>
-                      overviewTable(a.analysis!, settings.delimiterId === 'auto')
-                    }
-                  />
-                }
-              >
-                <Overview
-                  analysis={a.analysis}
-                  autoDetected={settings.delimiterId === 'auto'}
-                  phi={a.phi}
-                />
-              </Panel>
-              <FirstRecord analysis={a.analysis} maskColumns={maskColumns} />
-              <ColumnStats
-                analysis={a.analysis}
-                sqlColumns={a.sqlColumns ?? undefined}
-                phi={a.phi}
-                maskColumns={maskColumns}
-              />
-              {a.ndc.length > 0 ? (
-                <NdcPanel
-                  reports={a.ndc}
-                  rowsChecked={a.analysis.rows.length}
-                  truncated={a.analysis.truncated}
-                />
-              ) : null}
-              {a.sqlColumns ? (
-                <>
-                  <SqlPanel
-                    analysis={a.analysis}
-                    columns={a.sqlColumns}
-                    staging={settings.staging}
-                    onStagingChange={(value) => set('staging', value)}
-                    tableName={tableName}
-                    onTableNameChange={setTableName}
-                  />
-                  <EfModelPanel columns={a.sqlColumns} />
-                </>
-              ) : null}
-              <LoadPanel
-                analysis={a.analysis}
-                table={tableName}
-                hasHeader={settings.hasHeader}
-                fileName={nameA}
-              />
-              <DataPreview analysis={a.analysis} maskColumns={maskColumns} />
-            </>
-          ) : (
-            <section className="panel">
-              <div className="empty-state">
-                {a.pending
-                  ? 'Profiling…'
-                  : 'Paste delimited text above to see structure, column types and statistics.'}
-              </div>
-            </section>
-          )}
-        </>
-      ) : (
-        <>
-          <div className="compare-inputs">
-            <InputPanel
-              id="input-a"
-              title="A"
-              text={textA}
-              onText={setTextA}
-              file={fileA}
-              onFile={setFileA}
-              status={a}
-              encoding={settings.encoding}
-              compact
-            />
-            <InputPanel
-              id="input-b"
-              title="B"
-              text={textB}
-              onText={setTextB}
-              file={fileB}
-              onFile={setFileB}
-              status={b}
-              encoding={settings.encoding}
-              compact
-            />
-          </div>
-          <section className="panel">{toolbar}</section>
-
-          {a.analysis && b.analysis ? (
-            <CompareView a={a.analysis} b={b.analysis} />
-          ) : (
-            <section className="panel">
-              <div className="empty-state">
-                Paste a file into both A and B to compare their schema, column distributions and
-                rows.
-              </div>
-            </section>
-          )}
-        </>
-      )}
-    </>
+      <StatusBar
+        pending={busy}
+        progress={statusData?.progress ?? 0}
+        error={statusData?.error ?? null}
+        rows={showsA && analysis ? analysis.totalDataRows : null}
+        elapsedMs={showsA ? a.elapsedMs : null}
+        mask={mode === 'analyze' && a.phi.length > 0 ? { on: maskPhi, toggle: () => setMaskPhi((v) => !v) } : null}
+        format={format}
+      />
+    </div>
   );
 }

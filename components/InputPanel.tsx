@@ -35,6 +35,7 @@ export function InputPanel({
   onFile,
   status,
   onName,
+  onEncoding,
   encoding,
   compact = false,
   footer,
@@ -49,6 +50,8 @@ export function InputPanel({
   status: InputStatus;
   /** The opened file's name, or null once the input is pasted, typed or cleared. */
   onName?: (name: string | null) => void;
+  /** How an opened file was decoded, or null for pasted text and large files. */
+  onEncoding?: (label: string | null) => void;
   encoding: EncodingId;
   /** Shorter textarea, for the side-by-side compare layout. */
   compact?: boolean;
@@ -69,6 +72,7 @@ export function InputPanel({
       fromBom: result.fromBom,
       fellBack: result.fellBack,
     });
+    onEncoding?.(encodingLabel(result.encoding));
     // onText is a setter from the parent; re-running on its identity would loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bytes, encoding]);
@@ -78,6 +82,7 @@ export function InputPanel({
     if (opened.size > LARGE_FILE_BYTES) {
       setBytes(null);
       setDecoded(undefined);
+      onEncoding?.(null);
       onText('');
       onFile(opened);
       return;
@@ -91,6 +96,7 @@ export function InputPanel({
     setDecoded(undefined);
     onFile(null);
     onName?.(null);
+    onEncoding?.(null);
     onText('');
   };
 
@@ -104,6 +110,7 @@ export function InputPanel({
       setDecoded(undefined);
       onFile(null);
       onName?.(null);
+      onEncoding?.(null);
       onText(value);
     } catch {
       // Permission denied or no clipboard API: point the user at Ctrl+V instead.

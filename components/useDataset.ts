@@ -49,6 +49,8 @@ export interface Dataset {
   /** 0..1 while pending. */
   progress: number;
   error: string | null;
+  /** How long the last profile took, start to finish. */
+  elapsedMs: number | null;
   /** For a large file: how it was decoded and its first lines. */
   decoded?: DecodeInfo;
   head?: string;
@@ -64,6 +66,7 @@ export function useDataset(text: string, file: File | null, settings: Settings):
   const [pending, setPending] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
 
   const { delimiterId, hasHeader, trimFields, recognizeNullTokens } = settings;
   // Encoding only matters when the worker decodes the bytes itself.
@@ -82,6 +85,7 @@ export function useDataset(text: string, file: File | null, settings: Settings):
     setProgress(0);
     const timer = setTimeout(
       () => {
+        const started = performance.now();
         job = startProfile(
           source,
           { delimiterId, hasHeader, trimFields, recognizeNullTokens, encoding },
@@ -92,6 +96,7 @@ export function useDataset(text: string, file: File | null, settings: Settings):
             setResult(next);
             setError(null);
             setPending(false);
+            setElapsedMs(performance.now() - started);
           },
           (e: unknown) => {
             setError(e instanceof Error ? e.message : String(e));
@@ -139,6 +144,7 @@ export function useDataset(text: string, file: File | null, settings: Settings):
     pending,
     progress,
     error,
+    elapsedMs,
     decoded: result?.decoded,
     head: result?.head,
   };

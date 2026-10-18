@@ -185,6 +185,21 @@ export function buildLoadScript(analysis: Analysis, options: LoadOptions): strin
 const FORMATTED_NUMBER = /[$€£¥,()]/;
 const US_DATE = /^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}/;
 
+/**
+ * Numeric columns whose kept rows include a currency sign, thousands
+ * separator or accounting parentheses: the profiler reads them as numbers,
+ * SQL Server will not.
+ */
+export function formattedNumberColumns(analysis: Analysis): number[] {
+  return analysis.columns
+    .filter(
+      (c) =>
+        (c.type === 'integer' || c.type === 'decimal') &&
+        analysis.rows.some((r) => r[c.index] !== undefined && FORMATTED_NUMBER.test(r[c.index])),
+    )
+    .map((c) => c.index);
+}
+
 /** What will go wrong, or needs doing, before this load works. */
 export function loadNotes(analysis: Analysis, options: LoadOptions): LoadNote[] {
   const notes: LoadNote[] = [];
@@ -219,11 +234,7 @@ export function loadNotes(analysis: Analysis, options: LoadOptions): LoadNote[] 
       text: `${names(tokens)} ${tokens.length === 1 ? 'contains' : 'contain'} NULL/NA-style tokens. Both tools load them as text, which fails in typed columns. Blank them first, or load into text columns and convert with NULLIF.`,
     });
 
-  const formatted = analysis.columns.filter(
-    (c) =>
-      (c.type === 'integer' || c.type === 'decimal') &&
-      analysis.rows.some((r) => r[c.index] !== undefined && FORMATTED_NUMBER.test(r[c.index])),
-  );
+  const formatted = formattedNumberColumns(analysis).map((i) => analysis.columns[i]);
   if (formatted.length > 0)
     notes.push({
       severity: 'warn',

@@ -6,6 +6,7 @@ import {
   buildBcpCommand,
   buildBulkInsert,
   defaultLoadOptions,
+  formattedNumberColumns,
   lineEnding,
   loadNotes,
   recommendTool,
@@ -94,4 +95,9 @@ test('notes warn about quoting under bcp, null tokens, formatted numbers and mix
     loadNotes(numbers, defaultLoadOptions(numbers)).map((n) => n.text).join('\n'),
     /amt holds formatted numbers/,
   );
+});
+
+test('finds numeric columns written with currency signs or separators', () => {
+  const analysis = profile('id,amt,qty,label\n1,"$1,200.00",3,a\n2,(4.50),1,b\n3,7.00,2,c\n');
+  assert.deepEqual(formattedNumberColumns(analysis), [1]);
 });
