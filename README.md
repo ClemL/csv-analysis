@@ -29,7 +29,8 @@ see [Desktop app](#desktop-app).
   command, the preview, the SQL script, the EF model and the first record; every
   tab stays loaded, so options and generated scripts survive switching.
 - A **status bar** with what the profiler is doing and how long it took, the
-  PHI masking switch, and the file's format.
+  PHI masking switch, and the file's format; below it, the app's version and
+  build time and the newest [changelog](#changelog) entry.
 - Severity is shown by shape as well as color everywhere: a triangle blocks the
   load, a ring needs review, a square is clean or informational. IBM Plex Sans
   and JetBrains Mono are bundled at build time, so the desktop app needs no
@@ -477,6 +478,31 @@ load as text, numbers written with `$` or thousands separators that will not
 convert, m/d/y dates that depend on the login's language, that fields map by
 position, and the permissions BULK INSERT needs.
 
+## Changelog
+
+The status bar ends with the app's version, its build time and the newest
+entry from `public/updates.txt`. Selecting the entry opens a dialog with every
+entry, newest first.
+
+The file is plain text, one entry per line:
+
+```text
+2026-10-17T17:12:00Z - Values in flagged PHI columns are masked when copied
+2026-10-18T03:21:00Z - New Workbench design: a dark three-pane layout with a column inspector, a checks summary and a Ctrl K jump box
+```
+
+- Each line is `YYYY-MM-DDTHH:MM:00Z - What changed`, in UTC
+  (`date -u +%Y-%m-%dT%H:%M:00Z`), as a plain sentence about something a user
+  would notice. No commit hashes, pull request numbers or names.
+- Lines run **oldest first, newest last**, so shipping an entry is a one-line
+  append. The footer shows the last line.
+- The page fetches the file after it loads rather than bundling it, so adding
+  an entry needs no code change. A missing, unreadable or empty file only hides
+  the entry; the version and build time still show.
+
+The version comes from `package.json` and the build time is stamped once, at
+build, by `next.config.mjs`.
+
 ## Running locally
 
 ```bash
@@ -593,9 +619,13 @@ app/
   page.tsx          server component shell
   globals.css       all styling (the dark workbench theme, no CSS framework)
   icon.svg          favicon
+public/
+  updates.txt       the changelog, one entry per line, oldest first
 components/
   Analyzer.tsx      client component: state, modes, and the workbench layout
   Shell.tsx         top bar and jump box, left rail, status bar
+  Changelog.tsx     build info, the newest entry, and the changelog dialog
+  Modal.tsx         minimal modal dialog
   checks.ts         the rail's checks summary
   Inspector.tsx     everything about the selected column
   Panel.tsx         collapsible section with remembered state; plain inside a tab
@@ -631,6 +661,7 @@ lib/
   contract.ts       EF and DDL parsing, and checking a file against either
   format.ts         display formatting
   table.ts          Markdown, TSV and HTML table serialization
+  changelog.ts      turns updates.txt into its entries
 electron/
   main.mjs          desktop shell: app:// scheme, window and menu
 build/
@@ -648,8 +679,10 @@ tests/
   contract.test.ts  parser and check tests, against a real landing model
   table.test.ts     Markdown, TSV and HTML table escaping
   profile.test.ts   chunked parsing and profiling, estimates, streamed decoding
+  changelog.test.ts changelog parsing, and the shipped file's format and order
   fixtures/         a captured openFDA response, so tests need no network
 electron-builder.yml  desktop packaging targets
+CLAUDE.md         working agreements for Claude Code sessions
 ```
 
 ## Limits

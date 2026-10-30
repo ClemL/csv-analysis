@@ -1,0 +1,24 @@
+2026-09-09T05:04:00Z - CSV Inspector launches: paste a delimited file and see its structure, column types, null counts and statistics, all parsed in the browser
+2026-09-09T05:19:00Z - Added SQL types for Azure SQL per column, and a CREATE TABLE and INSERT script generator
+2026-09-09T05:24:00Z - Upgraded to Next.js 16 to clear security advisories
+2026-09-09T05:38:00Z - Sections collapse from their headers and remember whether they were open
+2026-09-09T05:55:00Z - Opened files are decoded from their bytes, honoring a byte-order mark and falling back to Windows-1252 when they are not UTF-8
+2026-09-09T05:55:00Z - The columns table lists the values that do not fit each column's type, marks candidate keys and counts duplicate rows
+2026-09-09T05:55:00Z - Columns that look like PHI or personal data are flagged
+2026-09-09T05:55:00Z - Added Compare mode: two files side by side, with schema changes, column distributions and rows matched on a key
+2026-09-09T05:55:00Z - Added staging widths for the SQL script, sizing every column for a landing table
+2026-09-09T12:23:00Z - Added Generate mode: sample claims or NDC directory files built from the openFDA drug directory
+2026-09-09T15:02:00Z - Descriptive columns such as brand_name and generic_name are no longer flagged as personal names
+2026-09-11T15:27:00Z - Generated claims samples use invented covered entities
+2026-09-12T16:09:00Z - Added an EF model generator for a landing-row entity, built on demand beside the SQL script
+2026-09-12T16:30:00Z - Added Contract check: test a file against an EF model or a CREATE TABLE before loading it
+2026-09-20T10:25:00Z - CSV Inspector is available as a desktop app for Windows, macOS and Linux
+2026-10-01T14:44:00Z - Added BCP log mode: reads bcp console output and explains what it copied, what went wrong and how to load the file back
+2026-10-09T13:49:00Z - Added Copy as table and Copy as MD buttons, and a Paste button that reads the clipboard
+2026-10-17T16:39:00Z - The BCP log re-import can load a file back into the same table with the export's own settings
+2026-10-17T17:08:00Z - Large files are read from disk in a background thread, and every row is profiled instead of the first 20,000
+2026-10-17T17:10:00Z - NDC columns are checked for lost leading zeros, spreadsheet damage and mixed formats, with a T-SQL fix
+2026-10-17T17:12:00Z - Values in flagged PHI columns are masked when copied
+2026-10-17T17:16:00Z - Added a load command: bcp or BULK INSERT, whichever suits the file
+2026-10-18T03:21:00Z - New Workbench design: a dark three-pane layout with a column inspector, a checks summary and a Ctrl K jump box
+2026-10-30T23:20:00Z - Added this changelog

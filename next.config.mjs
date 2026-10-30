@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 /**
  * The desktop build loads the app from disk rather than from a Next.js server,
  * so it emits a fully static bundle into `out/` instead of the usual `.next/`
@@ -13,9 +15,22 @@
 const desktop =
   process.env.DESKTOP_BUILD === '1' || process.env.npm_lifecycle_event === 'desktop:build';
 
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
+
+/**
+ * Stamped once at build time and inlined into the bundle, so the footer shows
+ * the same string in the prerendered HTML and on the client. Formatting a date
+ * at render time instead would differ by timezone and break hydration.
+ */
+const buildTime = `${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  env: {
+    NEXT_PUBLIC_APP_VERSION: pkg.version,
+    NEXT_PUBLIC_BUILD_TIME: buildTime,
+  },
   ...(desktop
     ? {
         output: 'export',
