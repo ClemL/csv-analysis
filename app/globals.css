@@ -1719,3 +1719,102 @@ td.faint-num {
 .muted {
   color: var(--text-muted);
 }
+
+/* Build info and the newest changelog entry: the status bar's last lines. */
+.build-info {
+  flex: 1 0 100%;
+  min-width: 0;
+  padding: 3px 0 1px;
+  border-top: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+.wb-status .changelog-trigger {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  margin-top: 1px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  /* One line only: the full text is in the title and the dialog. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wb-status .changelog-trigger:hover,
+.wb-status .changelog-trigger:focus-visible {
+  color: var(--text);
+}
+
+/* Modal dialog */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 60%);
+}
+
+.sheet {
+  width: min(640px, 100%);
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 18px 18px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 16px 48px rgb(0 0 0 / 45%);
+  outline: none;
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sheet-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.sheet-close {
+  display: grid;
+  place-items: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+}
+
+.changelog-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+  /* A long changelog scrolls inside the panel rather than growing it. */
+  max-height: 28rem;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.changelog-list li {
+  margin-bottom: 7px;
+}

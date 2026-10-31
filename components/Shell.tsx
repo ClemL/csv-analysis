@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { formatInt, formatPercent } from '@/lib/format';
 import type { Check } from './checks';
+import { BuildInfo, ChangelogDialog, useChangelog } from './Changelog';
 
 export type Mode = 'analyze' | 'compare' | 'contract' | 'bcp' | 'generate';
 
@@ -249,7 +250,10 @@ export function Rail({
   );
 }
 
-/** Bottom bar: what the profiler is doing, the masking switch, and the file's format. */
+/**
+ * Bottom bar: what the profiler is doing, the masking switch and the file's
+ * format, then the app's build info and newest changelog entry.
+ */
 export function StatusBar({
   pending,
   progress,
@@ -276,19 +280,29 @@ export function StatusBar({
     } in a background worker`;
   else status = 'Ready: paste text or open a file. Nothing leaves this browser.';
 
+  const entries = useChangelog();
+  const [changelogOpen, setChangelogOpen] = useState(false);
+  // Stable, so the dialog's Escape listener is not re-attached on every render.
+  const closeChangelog = useCallback(() => setChangelogOpen(false), []);
+
   return (
-    <footer className="wb-status">
-      <span role="status">
-        <span className={`wb-dot${pending ? ' busy' : ''}`} aria-hidden="true" />
-        {status}
-      </span>
-      {mask ? (
-        <button type="button" onClick={mask.toggle} aria-pressed={mask.on}>
-          Mask PHI when copying: {mask.on ? 'on' : 'off'}
-        </button>
-      ) : null}
-      <span className="spacer" />
-      {format.length > 0 ? <span className="mono">{format.join(' · ')}</span> : null}
-    </footer>
+    <>
+      <footer className="wb-status">
+        <span role="status">
+          <span className={`wb-dot${pending ? ' busy' : ''}`} aria-hidden="true" />
+          {status}
+        </span>
+        {mask ? (
+          <button type="button" onClick={mask.toggle} aria-pressed={mask.on}>
+            Mask PHI when copying: {mask.on ? 'on' : 'off'}
+          </button>
+        ) : null}
+        <span className="spacer" />
+        {format.length > 0 ? <span className="mono">{format.join(' · ')}</span> : null}
+        <BuildInfo entries={entries} onOpen={() => setChangelogOpen(true)} />
+      </footer>
+      {/* Outside <footer>, so the dialog does not inherit the footer's small type. */}
+      <ChangelogDialog entries={entries} open={changelogOpen} onClose={closeChangelog} />
+    </>
   );
 }
