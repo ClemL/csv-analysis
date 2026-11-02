@@ -30,6 +30,11 @@ jobs:
         run: npm test
       - name: Build (web)
         run: npm run build
+      # Against the web build, before the desktop export below replaces it.
+      - name: Install Chromium for the browser tests
+        run: npx playwright install --with-deps chromium
+      - name: Browser tests (four device screens, menus, changelog)
+        run: npm run test:e2e
       - name: Build (desktop static export)
         run: npx next build
         env:

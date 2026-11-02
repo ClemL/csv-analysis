@@ -331,7 +331,7 @@ export function Analyzer() {
           onCheck={onCheck}
         />
 
-        <main className="wb-main">
+        <main className={mode === 'analyze' && analysis ? 'wb-main analyze' : 'wb-main'}>
           {mode !== 'analyze' ? (
             <div className="wb-pad">
               {INTROS[mode] ? <p className="wb-intro">{INTROS[mode]}</p> : null}
@@ -356,6 +356,16 @@ export function Analyzer() {
                     maskColumns={maskColumns}
                     selected={column}
                     onSelect={setSelected}
+                  />
+                  {/* Under the table on one-column screens, beside everything on three panes. */}
+                  <Inspector
+                    analysis={analysis}
+                    index={column}
+                    sqlColumn={a.sqlColumns?.[column]}
+                    phi={a.phi.find((f) => f.columnIndex === column)}
+                    ndc={a.ndc.find((r) => r.columnIndex === column)}
+                    formatted={formatted.has(column)}
+                    masked={maskColumns.has(column)}
                   />
                   <section className="wb-output" id="wb-output" aria-label="Output">
                     <div className="wb-tabs" role="tablist" aria-label="Output">
@@ -437,18 +447,6 @@ export function Analyzer() {
             </>
           )}
         </main>
-
-        {mode === 'analyze' && analysis ? (
-          <Inspector
-            analysis={analysis}
-            index={column}
-            sqlColumn={a.sqlColumns?.[column]}
-            phi={a.phi.find((f) => f.columnIndex === column)}
-            ndc={a.ndc.find((r) => r.columnIndex === column)}
-            formatted={formatted.has(column)}
-            masked={maskColumns.has(column)}
-          />
-        ) : null}
       </div>
 
       <StatusBar

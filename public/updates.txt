@@ -22,3 +22,6 @@
 2026-10-17T17:16:00Z - Added a load command: bcp or BULK INSERT, whichever suits the file
 2026-10-18T03:21:00Z - New Workbench design: a dark three-pane layout with a column inspector, a checks summary and a Ctrl K jump box
 2026-10-30T23:20:00Z - Added this changelog
+2026-11-01T13:26:00Z - Fits foldables and tablets: a phone layout below 560px, one column up to 1100px and three panes beyond, with larger touch targets and nothing that scrolls sideways
+2026-11-01T13:26:00Z - Menus open fully on screen and follow their button when the screen scrolls, rotates or unfolds
+2026-11-01T13:26:00Z - The changelog dialog shows this screen's size and the layout in use

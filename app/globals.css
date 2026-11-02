@@ -486,8 +486,10 @@ td.mono {
 
 .script-controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 8px 10px;
+  min-width: 0;
 }
 
 .script-controls input[type='text'] {
@@ -500,6 +502,7 @@ td.mono {
   border-radius: 6px;
   padding: 4px 8px;
   width: 190px;
+  max-width: 100%;
 }
 
 .script-controls input[type='text']:focus {
@@ -588,11 +591,13 @@ button:disabled:hover {
 }
 
 .menu-list {
-  position: absolute;
-  top: calc(100% + 5px);
-  right: 0;
-  z-index: 20;
-  min-width: 224px;
+  /* Placed by Menu.tsx against the visible screen; it scrolls inside itself
+     rather than running off the bottom. */
+  position: fixed;
+  z-index: 60;
+  min-width: min(224px, calc(100vw - 16px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 4px;
   background: var(--panel);
   border: 1px solid var(--border-strong);
@@ -685,7 +690,7 @@ button:disabled:hover {
 .compare-inputs {
   display: grid;
   align-items: start;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -698,9 +703,10 @@ textarea.compact {
   min-height: 150px;
 }
 
-@media (max-width: 900px) {
+/* Side by side only on three panes; on one column the two inputs stack. */
+@media (max-width: 1099px) {
   .compare-inputs {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -1010,8 +1016,23 @@ td.wrap {
 
 /* ------------------------------------------------------------ Workbench shell */
 
+/*
+ * Three layouts, chosen by width alone (a nearly square unfolded foldable is
+ * neither a phone nor a tablet). lib/layout.ts holds the same numbers.
+ *
+ * - Phone, below 560px (a folded OnePlus Open at about 425px): one column, the
+ *   rail as swipeable rows, the jump box on a row of its own.
+ * - One column, 560 to 1099px (the unfolded OnePlus Open at about 864px, a
+ *   Galaxy Tab S Ultra held portrait at about 924px): the rail as rows across
+ *   the top, and the inspector directly under the columns table.
+ * - Three panes, from 1100px (the tablet held landscape at about 1480px, and
+ *   desktops): rail, main and inspector side by side. Three panes need about
+ *   210 + 600 + 300px, which is where this breakpoint comes from.
+ */
+
 .wb {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }
@@ -1111,15 +1132,12 @@ td.wrap {
 .wb-body {
   flex: 1 1 auto;
   display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
+  flex-direction: column;
 }
 
 .wb-rail {
-  flex: 1 1 210px;
-  max-width: 100%;
   background: var(--chrome);
-  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 
 .wb-rail-inner {
@@ -1231,10 +1249,16 @@ td.wrap {
 }
 
 .wb-main {
-  flex: 999 1 560px;
+  flex: 1 1 auto;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+}
+
+/* Input, overview, columns, inspector, then the output tabs filling the rest. */
+.wb-main.analyze {
+  grid-template-rows: auto auto auto auto 1fr;
 }
 
 .wb-pad {
@@ -1248,22 +1272,29 @@ td.wrap {
 
 .wb-intro {
   margin: 0 0 12px;
+  max-width: 100ch;
   color: var(--text-muted);
   font-size: 12.5px;
 }
 
 .wb-inspector {
-  flex: 1 1 300px;
-  max-width: 100%;
-  border-left: 1px solid var(--border);
+  min-width: 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   background: var(--panel);
 }
 
+/* Under the table the inspector's blocks sit side by side where they fit. */
 .wb-inspector-inner {
   padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  align-items: start;
+  gap: 16px 28px;
+}
+
+.wb-ins-head {
+  grid-column: 1 / -1;
 }
 
 /* Content taller than the sticky box scrolls; it never squashes. */
@@ -1272,20 +1303,15 @@ td.wrap {
   flex-shrink: 0;
 }
 
-/* On a phone the rail becomes one scrolling row of modes and checks. */
-@media (max-width: 760px) {
-  .wb-rail {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-  }
+/* Phone and one column: the rail is rows of modes and checks across the top. */
+@media (max-width: 1099px) {
   .wb-rail-inner {
-    flex-direction: row;
-    gap: 6px;
+    gap: 4px;
     padding: 6px 8px;
-    overflow-x: auto;
   }
   .wb-group {
     flex-direction: row;
+    flex-wrap: wrap;
     gap: 4px;
   }
   .wb-group > .wb-label,
@@ -1297,19 +1323,71 @@ td.wrap {
     white-space: nowrap;
     gap: 8px;
   }
-  .wb-inspector {
-    border-left: none;
-    border-top: 1px solid var(--border);
+}
+
+/* Below three panes the columns table has less room: tighter cells let all
+   eight columns fit at the unfolded OnePlus Open's width. */
+@media (max-width: 1099px) {
+  .wb-columns th,
+  .wb-columns td {
+    padding-left: 8px;
+    padding-right: 8px;
   }
 }
 
-/* On wide screens the rail and inspector stay in view while the table scrolls. */
+/* Phone: each rail row swipes sideways inside itself, and the jump box gets a
+   row of its own under the name and the file. */
+@media (max-width: 559px) {
+  .wb-group {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+  .wb-top .wb-jump {
+    order: 10;
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+  .wb-top,
+  .wb-pad {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+/* Three panes: rail, main and inspector side by side, the rail and inspector
+   staying in view while the table scrolls. */
 @media (min-width: 1100px) {
+  .wb-body {
+    flex-direction: row;
+  }
+  .wb-rail {
+    flex: 0 0 210px;
+    border-bottom: none;
+    border-right: 1px solid var(--border);
+  }
+  .wb-main.analyze {
+    grid-template-columns: minmax(0, 1fr) 300px;
+    grid-template-rows: auto auto auto 1fr;
+  }
+  .wb-main.analyze > .wb-inspector {
+    grid-column: 2;
+    grid-row: 1 / -1;
+    border-top: none;
+    border-bottom: none;
+    border-left: 1px solid var(--border);
+  }
+  .wb-inspector-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
   .wb-rail-inner,
   .wb-inspector-inner {
     position: sticky;
     top: 0;
     max-height: 100vh;
+    max-height: 100dvh;
     overflow-y: auto;
   }
 }
@@ -1490,7 +1568,6 @@ td.wrap {
   margin-top: 14px;
   border-top: 1px solid var(--border);
   background: var(--chrome);
-  flex: 1 1 auto;
 }
 
 .wb-tabs {
@@ -1771,6 +1848,7 @@ td.faint-num {
 .sheet {
   width: min(640px, 100%);
   max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1817,4 +1895,49 @@ td.faint-num {
 
 .changelog-list li {
   margin-bottom: 7px;
+}
+
+/*
+ * Touch screens: every control a finger can hit is at least 32px tall, with
+ * checkboxes enlarged inside a label of that height. The app has no density
+ * setting, so there is no roomier step.
+ */
+@media (hover: none) {
+  button,
+  select,
+  input[type='text'],
+  input[type='number'],
+  input[type='search'],
+  .field {
+    min-height: 32px;
+  }
+  .field input[type='checkbox'] {
+    width: 18px;
+    height: 18px;
+  }
+  .wb-colbtn,
+  .wb-status button,
+  .wb-status .changelog-trigger,
+  .menu-list button {
+    min-height: 32px;
+  }
+}
+
+.screen-readout {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.screen-size {
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+/* Long unbroken values (paths, URLs, identifiers) wrap rather than widen the page. */
+.notice,
+.wb-issue,
+.wb-chiplist code,
+.wb-intro {
+  overflow-wrap: anywhere;
 }

@@ -142,7 +142,7 @@ export function Inspector({
   return (
     <aside className="wb-inspector" aria-label="Column inspector">
       <div className="wb-inspector-inner">
-        <div>
+        <div className="wb-ins-head">
           <div className="wb-label">Inspector</div>
           <div className="wb-ins-name">{col.name}</div>
           <div className="wb-ins-sub">
