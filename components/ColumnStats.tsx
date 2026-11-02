@@ -166,8 +166,15 @@ export function ColumnStats({
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const rows = useRef<(HTMLTableRowElement | null)[]>([]);
 
-  // A selection made elsewhere (the rail, the jump box) brings its row into view.
+  // A selection made elsewhere (the rail, the jump box) brings its row into
+  // view. Not the first one: on a phone the table sits well down the page, and
+  // opening a file must not scroll the header away.
+  const shown = useRef(false);
   useEffect(() => {
+    if (!shown.current) {
+      shown.current = true;
+      return;
+    }
     rows.current[selected]?.scrollIntoView({ block: 'nearest' });
   }, [selected]);
 

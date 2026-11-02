@@ -14,7 +14,8 @@
     "desktop:start": "npm run desktop:build && electron .",
     "desktop:pack": "npm run desktop:build && electron-builder --dir",
     "desktop:dist": "npm run desktop:build && electron-builder",
-    "desktop:dist:win": "npm run desktop:build && electron-builder --win"
+    "desktop:dist:win": "npm run desktop:build && electron-builder --win",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "next": "16.3.4",
@@ -22,6 +23,7 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@playwright/test": "1.56.1",
     "@types/node": "22.15.3",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.4",

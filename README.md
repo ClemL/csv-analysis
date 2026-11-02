@@ -34,8 +34,9 @@ see [Desktop app](#desktop-app).
 - Severity is shown by shape as well as color everywhere: a triangle blocks the
   load, a ring needs review, a square is clean or informational. IBM Plex Sans
   and JetBrains Mono are bundled at build time, so the desktop app needs no
-  network for them. On a phone the rail becomes one scrolling row and the
-  inspector moves below the table.
+  network for them.
+- **Three layouts, by width alone** (see [Screens](#screens)): phone below
+  560px, one column from 560px, three panes from 1100px.
 
 **Input**
 
@@ -478,6 +479,34 @@ load as text, numbers written with `$` or thousands separators that will not
 convert, m/d/y dates that depend on the login's language, that fields map by
 position, and the permissions BULK INSERT needs.
 
+## Screens
+
+The layout follows the window's width, never its shape or orientation, so a
+foldable that opens mid-task or a tablet that rotates just reflows, keeping
+everything on screen: the file, the selected column, collapsed panels, the open
+tab, typed options and open dialogs.
+
+| Width | Layout | Built for |
+| --- | --- | --- |
+| below 560px | **Phone**: one column. The top bar splits into rows with the jump box on its own; the rail's modes and checks are rows that swipe sideways; the inspector sits under the columns table. | OnePlus Open folded (about 425px) |
+| 560 to 1099px | **One column**: the rail as rows across the top, the inspector under the columns table with its blocks side by side, Compare's inputs stacked. | OnePlus Open unfolded (about 864px), Galaxy Tab S Ultra portrait (about 924px) |
+| from 1100px | **Three panes**: rail, main and inspector side by side, the rail and inspector staying in view while the page scrolls. | Galaxy Tab S Ultra landscape (about 1480px), desktops |
+
+The numbers live in `lib/layout.ts` and in the stylesheet's media queries; a
+unit test fails if they drift apart. On touch screens every button, select,
+text field and checkbox label is at least 32px tall. Nothing scrolls sideways:
+wide tables, code and logs scroll inside their own boxes.
+
+Menus (Generate's **Use in**) open in the document body with fixed
+positioning, under their button, no wider than the screen and no taller than the
+space below it, scrolling inside themselves; they follow the button through
+scrolling, rotation, folding and the on-screen keyboard.
+
+The device sizes are estimates (panel resolution over a typical Android scale).
+The changelog dialog, opened from the status bar's newest entry, shows the
+real figures as "This screen: width × height CSS pixels at ratio× · layout";
+if a device reports other figures, correct `e2e/screens.ts`.
+
 ## Changelog
 
 The status bar ends with the app's version, its build time and the newest
@@ -517,7 +546,14 @@ npm run build      # production build
 npm start          # serve the production build
 npm test           # unit tests for the parser and profiler (node:test)
 npm run typecheck  # tsc --noEmit
+npm run test:e2e   # browser tests against the production build (run npm run build first)
 ```
+
+The browser tests (Playwright, `e2e/`) run every device check at the four
+screens in `e2e/screens.ts`: nothing scrolls sideways in any mode, the header,
+dialog and menu fit, the layout is the expected one, touch targets are at least
+32px, the screen readout is right, and unfolding mid-task keeps the app's
+state. They also cover the menus and the changelog.
 
 GitHub Actions (`.github/workflows/ci.yml`) runs the typecheck, the tests, the
 web build and the desktop static export on every push and pull request.
@@ -629,7 +665,7 @@ components/
   checks.ts         the rail's checks summary
   Inspector.tsx     everything about the selected column
   Panel.tsx         collapsible section with remembered state; plain inside a tab
-  Menu.tsx          dropdown menu button
+  Menu.tsx          dropdown menu button, placed against the visible screen
   InputPanel.tsx    paste area, file opening, byte decoding and large files
   CompareView.tsx   schema and row reconciliation between two datasets
   GeneratorView.tsx openFDA search, sample shaping and output
@@ -662,6 +698,8 @@ lib/
   format.ts         display formatting
   table.ts          Markdown, TSV and HTML table serialization
   changelog.ts      turns updates.txt into its entries
+  layout.ts         layout breakpoints shared with the stylesheet
+  anchor.ts         where a dropdown panel goes to land fully on screen
 electron/
   main.mjs          desktop shell: app:// scheme, window and menu
 build/
@@ -680,6 +718,14 @@ tests/
   table.test.ts     Markdown, TSV and HTML table escaping
   profile.test.ts   chunked parsing and profiling, estimates, streamed decoding
   changelog.test.ts changelog parsing, and the shipped file's format and order
+  layout.test.ts    breakpoints, and that the stylesheet uses the same numbers
+  anchor.test.ts    menu placement against the visible screen
+e2e/
+  screens.ts        the four device screens and shared helpers
+  devices.spec.ts   layout, overflow, touch targets, readout, unfolding
+  menus.spec.ts     menus land on screen and follow their button
+  changelog.spec.ts footer and changelog dialog
+  fixtures/         a sample claims file with a long unbroken value
   fixtures/         a captured openFDA response, so tests need no network
 electron-builder.yml  desktop packaging targets
 CLAUDE.md         working agreements for Claude Code sessions

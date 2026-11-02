@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { parseChangelog } from '@/lib/changelog';
+import { LAYOUT_QUERIES, type LayoutName } from '@/lib/layout';
 import { Modal } from './Modal';
 
 const APP_NAME = 'CSV Inspector';
@@ -61,7 +62,37 @@ export function BuildInfo({ entries, onOpen }: { entries: string[]; onOpen: () =
   );
 }
 
-/** Every entry, newest first. */
+/** The real figures on whatever device is reading, to check the device tests against. */
+function describeScreen(): string {
+  const ratio = Math.round(window.devicePixelRatio * 1000) / 1000;
+  // matchMedia, so the name is the one the stylesheet's own queries chose.
+  const layout: LayoutName = window.matchMedia(LAYOUT_QUERIES.phone).matches
+    ? 'phone'
+    : window.matchMedia(LAYOUT_QUERIES.threePanes).matches
+      ? 'three panes'
+      : 'one column';
+  return `${window.innerWidth} × ${window.innerHeight} CSS pixels at ${ratio}× · ${layout}`;
+}
+
+function ScreenReadout() {
+  const [screen, setScreen] = useState('');
+
+  // A fold or a rotation changes the screen while the dialog is open; the readout follows.
+  useEffect(() => {
+    const onResize = () => setScreen(describeScreen());
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  return (
+    <p className="screen-readout">
+      This screen: <span className="screen-size">{screen}</span>
+    </p>
+  );
+}
+
+/** Every entry, newest first, under a line describing the screen. */
 export function ChangelogDialog({
   entries,
   open,
@@ -73,6 +104,7 @@ export function ChangelogDialog({
 }) {
   return (
     <Modal open={open} onClose={onClose} title="Changelog">
+      <ScreenReadout />
       <ul className="changelog-list">
         {entries
           .slice()
