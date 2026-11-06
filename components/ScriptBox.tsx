@@ -7,17 +7,19 @@ export function CopyButton({
   text,
   label = 'Copy',
   className,
+  disabled = false,
 }: {
   text: string;
   label?: string;
   className?: string;
+  disabled?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
       type="button"
       className={className}
-      disabled={!text}
+      disabled={disabled || !text}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(text);

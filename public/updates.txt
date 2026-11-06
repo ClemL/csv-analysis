@@ -25,3 +25,5 @@
 2026-11-01T13:26:00Z - Fits foldables and tablets: a phone layout below 560px, one column up to 1100px and three panes beyond, with larger touch targets and nothing that scrolls sideways
 2026-11-01T13:26:00Z - Menus open fully on screen and follow their button when the screen scrolls, rotates or unfolds
 2026-11-01T13:26:00Z - The changelog dialog shows this screen's size and the layout in use
+2026-11-06T17:30:00Z - New Split XLSX mode: turns a workbook into one pipe-delimited file per sheet exactly as the importer's ClosedXML step writes it, flags the sheets and values that make it fail, and copies, downloads or zips the files
+2026-11-06T17:30:00Z - Text boxes no longer join characters such as |- into one symbol, so data shows as typed
