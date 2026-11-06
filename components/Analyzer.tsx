@@ -20,6 +20,7 @@ import { CompareView } from './CompareView';
 import { GeneratorView } from './GeneratorView';
 import { ContractView } from './ContractView';
 import { BcpView } from './BcpView';
+import { XlsxView } from './XlsxView';
 import { MODE_LABELS, Rail, StatusBar, TopBar, type JumpTarget, type Mode } from './Shell';
 import { computeChecks, type Check, type OutputTab } from './checks';
 
@@ -28,6 +29,8 @@ const INTROS: Partial<Record<Mode, string>> = {
     'Both sides are parsed with the same settings. Rows are matched on a column that is unique in both.',
   contract:
     'Check the file against an EF landing model or a CREATE TABLE before you try to load it.',
+  xlsx:
+    "Split a workbook into one delimited file per sheet, as the importer's XlsxUtil does with ClosedXML: same values, same names, same failures. Workbooks a custom extractor claims are converted by that extractor instead.",
   bcp: "Read bcp's console output: what it copied, which files it wrote, what went wrong, and how to load the file back.",
   generate: 'Real drug records from the openFDA NDC directory, shaped into a delimited file.',
 };
@@ -114,6 +117,14 @@ export function Analyzer() {
       setTextA(text);
     }
     setMode(target === 'analyze' ? 'analyze' : 'compare');
+  };
+
+  const openSplit = (text: string, name: string) => {
+    setFileA(null);
+    setEncodingA(null);
+    setTextA(text);
+    setNameA(name);
+    setMode('analyze');
   };
 
   // ------------------------------------------------------------ top bar
@@ -332,7 +343,7 @@ export function Analyzer() {
         />
 
         <main className={mode === 'analyze' && analysis ? 'wb-main analyze' : 'wb-main'}>
-          {mode !== 'analyze' ? (
+          {mode === 'xlsx' ? null : mode !== 'analyze' ? (
             <div className="wb-pad">
               {INTROS[mode] ? <p className="wb-intro">{INTROS[mode]}</p> : null}
               {main}
@@ -446,6 +457,12 @@ export function Analyzer() {
               )}
             </>
           )}
+          {/* Mounted throughout, so an opened workbook survives a visit to another mode;
+              last, so it never comes before the visible mode's own controls. */}
+          <div className="wb-pad" hidden={mode !== 'xlsx'}>
+            <p className="wb-intro">{INTROS.xlsx}</p>
+            <XlsxView onOpen={openSplit} />
+          </div>
         </main>
       </div>
 

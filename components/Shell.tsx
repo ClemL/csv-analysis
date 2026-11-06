@@ -5,7 +5,7 @@ import { formatInt, formatPercent } from '@/lib/format';
 import type { Check } from './checks';
 import { BuildInfo, ChangelogDialog, useChangelog } from './Changelog';
 
-export type Mode = 'analyze' | 'compare' | 'contract' | 'bcp' | 'generate';
+export type Mode = 'analyze' | 'compare' | 'contract' | 'xlsx' | 'bcp' | 'generate';
 
 const ICONS: Record<Mode, ReactNode> = {
   analyze: <path d="M4 19V9M10 19V5M16 19v-7M22 19H2" />,
@@ -21,6 +21,12 @@ const ICONS: Record<Mode, ReactNode> = {
       <path d="M10 13l2 2 4-4" />
     </>
   ),
+  xlsx: (
+    <>
+      <rect x="3" y="3" width="12" height="12" rx="1" />
+      <path d="M3 9h12M9 3v12M19 9v10a2 2 0 0 1-2 2H9" />
+    </>
+  ),
   bcp: <path d="M4 6h16M4 12h10M4 18h13" />,
   generate: <path d="M12 4v16M4 12h16" />,
 };
@@ -29,6 +35,7 @@ export const MODE_LABELS: Record<Mode, string> = {
   analyze: 'Analyze',
   compare: 'Compare',
   contract: 'Contract check',
+  xlsx: 'Split XLSX',
   bcp: 'BCP log',
   generate: 'Generate sample',
 };

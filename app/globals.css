@@ -142,6 +142,8 @@ textarea {
   overflow-wrap: normal;
   overflow-x: auto;
   tab-size: 4;
+  /* Data, not prose: "|-" must not become a turnstile, nor "->" an arrow. */
+  font-variant-ligatures: none;
 }
 
 textarea::placeholder {
@@ -931,6 +933,76 @@ td.cell-b {
 .ef-toolbar input:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+/* Split XLSX */
+
+.xlsx-toolbar input[type='text'],
+.xlsx-toolbar input[type='number'] {
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 4px 8px;
+  width: 72px;
+}
+
+.xlsx-toolbar input[type='text']:focus,
+.xlsx-toolbar input[type='number']:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.xlsx-sheet .xlsx-toolbar {
+  border-top: none;
+  border-bottom: 1px solid var(--border);
+}
+
+/* The output file's name is the panel's title: keep its case, and let a long one wrap. */
+.xlsx-sheet .panel-toggle h2 {
+  font-family: var(--mono);
+  text-transform: none;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.xlsx-sheet .panel-toggle {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.xlsx-notices {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.xlsx-sheet textarea.xlsx-preview {
+  min-height: 0;
+}
+
+/* Copy and Download wrap as a pair, never one per line. */
+.xlsx-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.xlsx-more {
+  padding-top: 8px;
+  padding-bottom: 10px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.xlsx-files td:first-child {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 180px;
 }
 
 /* Contract check */

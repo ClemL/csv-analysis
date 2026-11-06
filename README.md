@@ -18,7 +18,7 @@ see [Desktop app](#desktop-app).
 - A **top bar** with the file's name and shape (size, encoding, delimiter, line
   endings, quoting) and a **jump box** (Ctrl K) that goes straight to a column,
   an output tab or a mode by name.
-- A **left rail** with the five modes and, in Analyze, a **checks** summary:
+- A **left rail** with the six modes and, in Analyze, a **checks** summary:
   NDC, load, type mismatches, PHI columns, duplicate rows and field counts, each
   with a count. Selecting a check opens the column or tab it is about.
 - In Analyze, the **columns table** in the middle and an **inspector** on the
@@ -174,6 +174,62 @@ separators (`1,234.50`), a currency prefix (`$99`) or accounting negatives
 **Null handling** counts empty strings as missing always, and `NULL`, `NA`,
 `N/A`, `NIL`, `NONE`, `NAN`, `\N`, `#N/A` and `UNDEFINED` as missing when the
 "treat NULL/NA/N/A as null" toggle is on. The column table separates the two.
+
+## Split XLSX
+
+Open an `.xlsx` workbook and get the delimited files the importer's
+`XlsxUtil.ConvertXlsToCsvAsync` writes from it with ClosedXML 0.105.1, one per
+worksheet, to copy, download one at a time or download together as a `.zip`,
+or to open in Analyze. The workbook is read in a background worker, in the
+browser; nothing is uploaded.
+
+What each file holds, as the importer does it:
+
+- **Name** — `{workbook}.{sheet}.csv`, where `{workbook}` is the file name
+  without its extension and without anything before its first dot, unless that
+  part is a whole number (`BILH.claims.xlsx` gives `claims.Sheet1.csv`;
+  `20260901.claims.xlsx` keeps its date). The name is cut at 80 characters,
+  extension or not. Two sheets that end up with the same name are flagged,
+  since the later one overwrites the earlier.
+- **Rows** — the sheet's used range: the box around every cell holding a
+  value, a formula or a comment (formatting alone does not count), and within
+  it only the rows that have one. Every row has every column of the range.
+  Hidden sheets are included; chart and other non-worksheet sheets are not.
+  **Skip rows** drops used rows from the top, per sheet, like the importer's
+  skip-row setting.
+- **Values** — each cell as `GetFormattedString()` prints it in en-US: text
+  as stored, `TRUE`/`FALSE`, error codes, and numbers and dates through
+  ExcelNumberFormat 1.1.0, ported here with its quirks: built-in formats are
+  read from ClosedXML's own table, General numbers print with 15 significant
+  digits, exact halves round to even, Excel's day 0 and 29 February 1900 are
+  kept, and a 1904 workbook's dates are moved on 1,462 days.
+- **Separator and line ending** — pipe by default, as in the importer's
+  config. Lines end with the host's `Environment.NewLine`, the last line
+  included: CRLF on Windows, LF on Linux. Line breaks inside rich and inline
+  text follow it too. Fields are **never quoted**.
+
+What it flags, because the importer would get it wrong or stop:
+
+- **Importer fails** — a sheet with nothing used (ClosedXML's `RangeUsed()`
+  returns null and the importer throws a `NullReferenceException`), and values
+  its formatter throws on (zero in a scientific format, a serial too large for
+  a date). The importer stops at the first; the page shows the cell with
+  `!` and the exception name and carries on.
+- **Format code printed** — a format the formatter cannot read prints as
+  itself. Excel's built-in AM/PM times (formats 18 and 19) do this, since
+  ClosedXML maps them to the .NET pattern `h:mm tt`.
+- **Unquoted** — values holding the separator or a line break, which split
+  their row.
+- **Not calculated** — formulas saved without a result, which ClosedXML
+  calculates while converting and this page leaves blank.
+- **Not picked up** — a file name without `.xlsx` in it, which the importer's
+  cleaner skips.
+
+The expected outputs in `tests/fixtures/xlsx/closedxml` were written by
+ClosedXML itself on .NET 8 through the same loop, and the tests match them byte
+for byte, including 53 number formats over ten values each. Workbooks one of the
+importer's custom `IExcelExtractor`s claims are converted by that extractor, not
+this path.
 
 ## BCP log
 
@@ -669,6 +725,8 @@ components/
   InputPanel.tsx    paste area, file opening, byte decoding and large files
   CompareView.tsx   schema and row reconciliation between two datasets
   GeneratorView.tsx openFDA search, sample shaping and output
+  XlsxView.tsx      workbook options, per-sheet output, copy, download and zip
+  xlsxClient.ts     starts and cancels the workbook worker; main-thread fallback
   EfModelPanel.tsx  EF entity generation and its placeholders
   ContractView.tsx  contract input, findings and the column-by-column table
   ScriptBox.tsx     read-only generated file with copy and download
@@ -700,6 +758,11 @@ lib/
   changelog.ts      turns updates.txt into its entries
   layout.ts         layout breakpoints shared with the stylesheet
   anchor.ts         where a dropdown panel goes to land fully on screen
+  xlsx.ts           worksheets to delimited files, as the importer's ClosedXML loop writes them
+  xlsx.worker.ts    the background worker for workbooks
+  numfmt.ts         Excel number formats, ported from ExcelNumberFormat 1.1.0 (MIT)
+  xml.ts            a small streaming XML reader
+  zip.ts            ZIP reading with the platform's inflater, and stored ZIP writing
 electron/
   main.mjs          desktop shell: app:// scheme, window and menu
 build/
@@ -720,11 +783,15 @@ tests/
   changelog.test.ts changelog parsing, and the shipped file's format and order
   layout.test.ts    breakpoints, and that the stylesheet uses the same numbers
   anchor.test.ts    menu placement against the visible screen
+  xlsx.test.ts      workbook splitting against ClosedXML's own output, naming, ZIP
+  numfmt.test.ts    number formatting and rounding against .NET 8
+  fixtures/xlsx/    sample workbooks and what ClosedXML wrote for them
 e2e/
   screens.ts        the four device screens and shared helpers
   devices.spec.ts   layout, overflow, touch targets, readout, unfolding
   menus.spec.ts     menus land on screen and follow their button
   changelog.spec.ts footer and changelog dialog
+  xlsx.spec.ts      Split XLSX at each screen: files, downloads, zip, Analyze
   fixtures/         a sample claims file with a long unbroken value
   fixtures/         a captured openFDA response, so tests need no network
 electron-builder.yml  desktop packaging targets
